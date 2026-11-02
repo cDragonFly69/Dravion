@@ -1,0 +1,2753 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.4 effective-5.10 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)
+// swift-module-flags: -target arm64-apple-macos14.0 -enable-objc-interop -enable-library-evolution -language-mode 5 -O -enable-experimental-feature DebugDescriptionMacro -module-name RelayCore -package-name src
+// swift-module-flags-ignorable:  -formal-cxx-interoperability-mode=off -interface-compiler-version 6.4
+import CoreGraphics
+import CryptoKit
+import Darwin
+import Foundation
+import Foundation/*.Bundle*/
+import Foundation/*.ProcessInfo*/
+import Foundation/*.URL*/
+import Observation
+import SQLite3
+import Security
+import Swift
+import _Concurrency
+import _StringProcessing
+import _SwiftConcurrencyShims
+public struct RelayAssignment : Swift::Equatable, Swift::Sendable {
+  public var planner: Swift::String
+  public var executors: [Swift::String]
+  public var tester: Swift::String
+  public var reviewer: Swift::String
+  public init(planner: Swift::String = "", executors: [Swift::String] = [], tester: Swift::String = "", reviewer: Swift::String = "")
+  public static let payloadPrefix: Swift::String
+  public static func payload(_ roleID: Swift::String) -> Swift::String
+  public static func dropped(_ items: [Swift::String], enabled: [Swift::String], multiple: Swift::Bool) -> [Swift::String]
+  public func holders(_ stage: RelayCore::RelayStage) -> [Swift::String]
+  public func assigning(_ id: Swift::String, to stage: RelayCore::RelayStage, direct: Swift::Bool = false) -> RelayCore::RelayAssignment
+  public func assigning(_ ids: [Swift::String], to stage: RelayCore::RelayStage, direct: Swift::Bool = false) -> RelayCore::RelayAssignment
+  public func removing(_ id: Swift::String, from stage: RelayCore::RelayStage) -> RelayCore::RelayAssignment
+  public func clearing(_ stage: RelayCore::RelayStage) -> RelayCore::RelayAssignment
+  public static func == (a: RelayCore::RelayAssignment, b: RelayCore::RelayAssignment) -> Swift::Bool
+}
+public struct RelayAutomationModule : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public struct Parameter : Swift::Codable, Swift::Equatable, Swift::Sendable {
+    public var key: Swift::String
+    public var label: Swift::String
+    public var defaultValue: Swift::String
+    public var required: Swift::Bool
+    public init(_ key: Swift::String, _ label: Swift::String, default value: Swift::String = "", required: Swift::Bool = false)
+    public static func == (a: RelayCore::RelayAutomationModule.RelayCore::Parameter, b: RelayCore::RelayAutomationModule.RelayCore::Parameter) -> Swift::Bool
+    public func encode(to encoder: any Swift::Encoder) throws
+    public init(from decoder: any Swift::Decoder) throws
+  }
+  public struct Step : Swift::Codable, Swift::Equatable, Swift::Sendable {
+    public var title: Swift::String
+    public var command: Swift::String?
+    public var action: Swift::String?
+    public var directory: Swift::String
+    public var timeoutSeconds: Swift::Int
+    public var continueOnError: Swift::Bool
+    public init(_ title: Swift::String, command: Swift::String? = nil, action: Swift::String? = nil, in directory: Swift::String = "project", timeout: Swift::Int = 600, continueOnError: Swift::Bool = false)
+    public static func == (a: RelayCore::RelayAutomationModule.RelayCore::Step, b: RelayCore::RelayAutomationModule.RelayCore::Step) -> Swift::Bool
+    public func encode(to encoder: any Swift::Encoder) throws
+    public init(from decoder: any Swift::Decoder) throws
+  }
+  public enum Trigger : Swift::String, Swift::Codable, Swift::Sendable {
+    case manual, schedule, employee, afterRun
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var id: Swift::String
+  public var name: Swift::String
+  public var summary: Swift::String
+  public var category: Swift::String
+  public var version: Swift::Int
+  public var parameters: [RelayCore::RelayAutomationModule.RelayCore::Parameter]
+  public var steps: [RelayCore::RelayAutomationModule.RelayCore::Step]
+  public var touches: [Swift::String]
+  public var triggers: [RelayCore::RelayAutomationModule.RelayCore::Trigger]
+  public var needsProject: Swift::Bool
+  public static func == (a: RelayCore::RelayAutomationModule, b: RelayCore::RelayAutomationModule) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayAutomationInstall : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public enum Schedule : Swift::Codable, Swift::Equatable, Swift::Sendable {
+    case daily(hour: Swift::Int, minute: Swift::Int)
+    case every(minutes: Swift::Int)
+    public var label: Swift::String {
+      get
+    }
+    public static func == (a: RelayCore::RelayAutomationInstall.RelayCore::Schedule, b: RelayCore::RelayAutomationInstall.RelayCore::Schedule) -> Swift::Bool
+    public func encode(to encoder: any Swift::Encoder) throws
+    public init(from decoder: any Swift::Decoder) throws
+  }
+  public var id: Swift::String {
+    get
+  }
+  public var moduleID: Swift::String
+  public var enabled: Swift::Bool
+  public var values: [Swift::String : Swift::String]
+  public var projectID: Swift::String?
+  public var schedule: RelayCore::RelayAutomationInstall.RelayCore::Schedule?
+  public var installedAt: Foundation::Date
+  public var lastRunAt: Foundation::Date?
+  public init(moduleID: Swift::String)
+  public static func == (a: RelayCore::RelayAutomationInstall, b: RelayCore::RelayAutomationInstall) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayAutomationRun : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public enum Status : Swift::String, Swift::Codable, Swift::Sendable {
+    case running, succeeded, failed, cancelled
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public struct StepResult : Swift::Codable, Swift::Equatable, Swift::Sendable {
+    public var title: Swift::String
+    public var exitCode: Swift::Int?
+    public var output: Swift::String
+    public var seconds: Swift::Double
+    public var skipped: Swift::Bool
+    public static func == (a: RelayCore::RelayAutomationRun.RelayCore::StepResult, b: RelayCore::RelayAutomationRun.RelayCore::StepResult) -> Swift::Bool
+    public func encode(to encoder: any Swift::Encoder) throws
+    public init(from decoder: any Swift::Decoder) throws
+  }
+  public var id: Swift::String
+  public var moduleID: Swift::String
+  public var moduleName: Swift::String
+  public var trigger: RelayCore::RelayAutomationModule.RelayCore::Trigger
+  public var requestedBy: Swift::String?
+  public var projectName: Swift::String?
+  public var status: RelayCore::RelayAutomationRun.RelayCore::Status
+  public var steps: [RelayCore::RelayAutomationRun.RelayCore::StepResult]
+  public var startedAt: Foundation::Date
+  public var endedAt: Foundation::Date?
+  public var summary: Swift::String {
+    get
+  }
+  public static func == (a: RelayCore::RelayAutomationRun, b: RelayCore::RelayAutomationRun) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum RelayAutomationCatalog {
+  public static let desktopDefault: Swift::String
+  public static let builtIn: [RelayCore::RelayAutomationModule]
+}
+@_Concurrency::MainActor final public class RelayAutomationHost {
+  @_Concurrency::MainActor final public var installs: [RelayCore::RelayAutomationInstall] {
+    get
+  }
+  @_Concurrency::MainActor final public var runs: [RelayCore::RelayAutomationRun] {
+    get
+  }
+  @_Concurrency::MainActor final public var running: Swift::Set<Swift::String> {
+    get
+  }
+  @_Concurrency::MainActor final public var lastError: Swift::String? {
+    get
+  }
+  @_Concurrency::MainActor final public var flowRevision: Swift::Int {
+    get
+  }
+  @_Concurrency::MainActor final public var onQuit: (() -> Swift::Void)?
+  @_Concurrency::MainActor final public var onFinished: ((RelayCore::RelayAutomationRun) -> Swift::Void)?
+  @_Concurrency::MainActor final public let directory: Foundation::URL
+  @_Concurrency::MainActor public init(store: RelayCore::RelayStore, runner: RelayCore::RelayProcessRunner = .init(), directory: Foundation::URL? = nil)
+  @_Concurrency::MainActor final public var catalog: [RelayCore::RelayAutomationModule] {
+    get
+  }
+  @_Concurrency::MainActor final public func module(_ id: Swift::String) -> RelayCore::RelayAutomationModule?
+  @_Concurrency::MainActor final public func install(of id: Swift::String) -> RelayCore::RelayAutomationInstall?
+  @_Concurrency::MainActor final public var installedModules: [RelayCore::RelayAutomationModule] {
+    get
+  }
+  @_Concurrency::MainActor final public func install(_ id: Swift::String)
+  @_Concurrency::MainActor final public func installAll()
+  @_Concurrency::MainActor final public func uninstall(_ id: Swift::String)
+  @_Concurrency::MainActor final public func update(_ record: RelayCore::RelayAutomationInstall)
+  @_Concurrency::MainActor final public func agentGuide(executable: Swift::String) -> Swift::String?
+  @_Concurrency::MainActor final public func reloadRuns()
+  @discardableResult
+  @_Concurrency::MainActor final public func run(_ id: Swift::String, projectID: Swift::String? = nil, overrides: [Swift::String : Swift::String] = [:], trigger: RelayCore::RelayAutomationModule.RelayCore::Trigger, requestedBy: Swift::String? = nil) async -> RelayCore::RelayAutomationRun
+  nonisolated public static func fill(_ template: Swift::String, _ values: [Swift::String : Swift::String]) -> Swift::String
+  @_Concurrency::MainActor final public func start()
+  @_Concurrency::MainActor final public func stop()
+  nonisolated public static func due(_ schedule: RelayCore::RelayAutomationInstall.RelayCore::Schedule, lastRun: Foundation::Date?, installed: Foundation::Date, now: Foundation::Date) -> Swift::Bool
+  @objc deinit
+}
+extension RelayCore::RelayAutomationHost : nonisolated Observation::Observable {
+}
+public struct RelayFlowModule : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public struct Step : Swift::Codable, Swift::Equatable, Swift::Sendable {
+    public enum Kind : Swift::String, Swift::Codable, Swift::Sendable {
+      case employee, confirm
+      public init?(rawValue: Swift::String)
+      public typealias RawValue = Swift::String
+      public var rawValue: Swift::String {
+        get
+      }
+    }
+    public var kind: RelayCore::RelayFlowModule.RelayCore::Step.RelayCore::Kind
+    public var title: Swift::String
+    public var task: Swift::String
+    public static func == (a: RelayCore::RelayFlowModule.RelayCore::Step, b: RelayCore::RelayFlowModule.RelayCore::Step) -> Swift::Bool
+    public func encode(to encoder: any Swift::Encoder) throws
+    public init(from decoder: any Swift::Decoder) throws
+  }
+  public var id: Swift::String
+  public var name: Swift::String
+  public var platform: Swift::String
+  public var summary: Swift::String
+  public var inputHint: Swift::String
+  public var steps: [RelayCore::RelayFlowModule.RelayCore::Step]
+  public var cron: Swift::String?
+  public var finishURL: Swift::String
+  public var finishNote: Swift::String
+  public func definition(employeeID: Swift::String) -> RelayCore::RelayWorkflowDefinition
+  public static func == (a: RelayCore::RelayFlowModule, b: RelayCore::RelayFlowModule) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayFlowInstall : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public var id: Swift::String {
+    get
+  }
+  public var flowID: Swift::String
+  public var workflowID: Swift::String
+  public var employeeID: Swift::String
+  public var installedAt: Foundation::Date
+  public static func == (a: RelayCore::RelayFlowInstall, b: RelayCore::RelayFlowInstall) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum RelayFlowCatalog {
+  public static let builtIn: [RelayCore::RelayFlowModule]
+}
+extension RelayCore::RelayAutomationHost {
+  @_Concurrency::MainActor final public var flowInstalls: [RelayCore::RelayFlowInstall] {
+    get
+  }
+  @_Concurrency::MainActor final public func flowInstall(of id: Swift::String) -> RelayCore::RelayFlowInstall?
+  @_Concurrency::MainActor final public func installFlow(_ flow: RelayCore::RelayFlowModule, employeeID: Swift::String, workforce: RelayCore::RelayWorkforceHost) throws
+  @_Concurrency::MainActor final public func uninstallFlow(_ id: Swift::String, workforce: RelayCore::RelayWorkforceHost)
+  @_Concurrency::MainActor final public func runFlow(_ id: Swift::String, input: Swift::String, workforce: RelayCore::RelayWorkforceHost) throws
+}
+public struct RelayCodexAppUnavailable : Swift::Error, Foundation::LocalizedError {
+  public let cause: any Swift::Error
+  public var errorDescription: Swift::String? {
+    get
+  }
+}
+public struct RelaySharedTurnUnconfirmed : Swift::Error, Foundation::LocalizedError {
+  public var errorDescription: Swift::String? {
+    get
+  }
+}
+@_Concurrency::MainActor final public class RelayCodexConnector {
+  @_Concurrency::MainActor public init(runner: RelayCore::RelayProcessRunner = .init())
+  @_Concurrency::MainActor final public func probe(command: Swift::String, connection: RelayCore::RelayConnection, directory: Swift::String) async throws -> Swift::String
+  @_Concurrency::MainActor final public func execute(_ request: RelayCore::RelayAgentRequest, command: Swift::String, config: [Swift::String : Any], emit: @escaping @_Concurrency::MainActor (RelayCore::RelayEventKind, Swift::String) -> Swift::Void, session: @escaping @_Concurrency::MainActor (Swift::String) -> Swift::Void) async throws -> RelayCore::RelayAgentResult
+  @objc deinit
+}
+public enum RelayConnectorTransport : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+  case cli, codexAppServer, codexDesktop, workbuddyApp
+  public var label: Swift::String {
+    get
+  }
+  public var detail: Swift::String {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [RelayCore::RelayConnectorTransport]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [RelayCore::RelayConnectorTransport] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+extension RelayCore::RelayConnection {
+  public var connectorTransport: RelayCore::RelayConnectorTransport {
+    get
+  }
+  public var codexCLIFallback: Swift::Bool {
+    get
+  }
+  public var connectorTransports: [RelayCore::RelayConnectorTransport] {
+    get
+  }
+  public func hasSameExecutionSetup(as other: RelayCore::RelayConnection) -> Swift::Bool
+  public func validateConnector() throws
+}
+public struct RelayUserQuestion : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public var id: Swift::String
+  public var question: Swift::String
+  public var options: [Swift::String]
+  public init(question: Swift::String, options: [Swift::String] = [])
+  public func validated() throws -> RelayCore::RelayUserQuestion
+  public static func fromOutput(_ output: Swift::String) throws -> RelayCore::RelayUserQuestion?
+  public static let instruction: Swift::String
+  public static func == (a: RelayCore::RelayUserQuestion, b: RelayCore::RelayUserQuestion) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum RelayCallStatus : Swift::String, Swift::Codable, Swift::Sendable {
+  case running, succeeded, failed, waitingUser, interrupted
+  public var label: Swift::String {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct RelayCallRecord : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public var id: Swift::String
+  public var roleID: Swift::String
+  public var taskID: Swift::String?
+  public var stage: RelayCore::RelayStage
+  public var connectionID: Swift::String
+  public var transport: RelayCore::RelayConnectorTransport
+  public var requestedModel: Swift::String
+  public var reportedModel: Swift::String?
+  public var reportedEffort: Swift::String?
+  public var effort: Swift::String
+  public var sessionID: Swift::String?
+  public var resumed: Swift::Bool
+  public var startedAt: Foundation::Date
+  public var endedAt: Foundation::Date?
+  public var status: RelayCore::RelayCallStatus
+  public var usage: RelayCore::RelayTokenUsage?
+  public var error: Swift::String?
+  public init(request: RelayCore::RelayAgentRequest, taskID: Swift::String?)
+  public var modelMismatch: Swift::Bool {
+    get
+  }
+  public static func == (a: RelayCore::RelayCallRecord, b: RelayCore::RelayCallRecord) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayDoubaoSnapshot : Swift::Decodable, Swift::Sendable {
+  public struct Message : Swift::Decodable, Swift::Sendable, Swift::Equatable {
+    public var role: Swift::String
+    public var text: Swift::String
+    public static func == (a: RelayCore::RelayDoubaoSnapshot.RelayCore::Message, b: RelayCore::RelayDoubaoSnapshot.RelayCore::Message) -> Swift::Bool
+    public init(from decoder: any Swift::Decoder) throws
+  }
+  public var ok: Swift::Bool
+  public var error: Swift::String?
+  public var conversationId: Swift::String?
+  public var title: Swift::String
+  public var messages: [RelayCore::RelayDoubaoSnapshot.RelayCore::Message]
+  public var busy: Swift::Bool
+  public var sent: Swift::Bool?
+  public var replyAfterLastUser: Swift::String {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+@_Concurrency::MainActor final public class RelayDoubaoApp {
+  @_Concurrency::MainActor public static let bundleID: Swift::String
+  @_Concurrency::MainActor public init(runner: RelayCore::RelayProcessRunner = .init(), sidecars: Foundation::URL)
+  nonisolated public static func helperPath(sidecars: Foundation::URL) -> Swift::String?
+  @_Concurrency::MainActor final public func helperOrThrow() throws -> Swift::String
+  @_Concurrency::MainActor final public func snapshot() async throws -> RelayCore::RelayDoubaoSnapshot
+  @_Concurrency::MainActor final public func probe(_ connection: RelayCore::RelayConnection) async throws -> Swift::String
+  @_Concurrency::MainActor final public func execute(_ request: RelayCore::RelayAgentRequest, emit: @escaping @_Concurrency::MainActor (RelayCore::RelayEventKind, Swift::String) -> Swift::Void, session: @escaping @_Concurrency::MainActor (Swift::String) -> Swift::Void) async throws -> RelayCore::RelayAgentResult
+  nonisolated public static func explain(_ code: Swift::String) -> Swift::String
+  @objc deinit
+}
+public struct RelayGroupStats : Swift::Equatable, Swift::Sendable {
+  public var groupID: Swift::String?
+  public var runs: Swift::Int
+  public var succeeded: Swift::Int
+  public var failed: Swift::Int
+  public var cancelled: Swift::Int
+  public var inputTokens: Swift::Int
+  public var cachedTokens: Swift::Int
+  public var cacheWriteTokens: Swift::Int
+  public var outputTokens: Swift::Int
+  public var activeSeconds: Swift::Double
+  public init(groupID: Swift::String? = nil)
+  public var totalTokens: Swift::Int {
+    get
+  }
+  public var cacheHitRate: Swift::Double {
+    get
+  }
+  public var successRate: Swift::Double {
+    get
+  }
+  public var tokensPerSucceededRun: Swift::Int {
+    get
+  }
+  public var tokensPerActiveMinute: Swift::Int {
+    get
+  }
+  public var efficiencyScore: Swift::Double {
+    get
+  }
+  public static func of(_ groupID: Swift::String?, runs: [RelayCore::RelayRun]) -> RelayCore::RelayGroupStats
+  public static func overall(runs: [RelayCore::RelayRun]) -> RelayCore::RelayGroupStats
+  public static func all(groups: [RelayCore::RelayGroup], runs: [RelayCore::RelayRun]) -> [RelayCore::RelayGroupStats]
+  public static func == (a: RelayCore::RelayGroupStats, b: RelayCore::RelayGroupStats) -> Swift::Bool
+}
+public enum RelayKnowledgeCapture {
+  public static func noteCommand(_ text: Swift::String) -> Swift::String?
+  public static let mask: Swift::String
+  public static func redact(_ text: Swift::String, known: (Swift::String) -> Swift::String = { $0 }) -> Swift::String
+  public static func refusal(for url: Foundation::URL) -> Swift::String?
+  public static func readText(_ url: Foundation::URL) throws -> Swift::String
+  public static func htmlText(_ html: Swift::String) -> (title: Swift::String, text: Swift::String)
+  public static func fetch(_ url: Foundation::URL) async throws -> (title: Swift::String, text: Swift::String, url: Foundation::URL)
+  public static func title(for text: Swift::String, fallback: Swift::String = "笔记") -> Swift::String
+}
+extension RelayCore::RelayKnowledgeStore {
+  public struct RemoteRemember : Swift::Equatable, Swift::Sendable {
+    public var cardID: Swift::String
+    public var title: Swift::String
+    public var summary: Swift::String
+    public init(cardID: Swift::String, title: Swift::String, summary: Swift::String)
+    public static func == (a: RelayCore::RelayKnowledgeStore.RelayCore::RemoteRemember, b: RelayCore::RelayKnowledgeStore.RelayCore::RemoteRemember) -> Swift::Bool
+  }
+  @discardableResult
+  final public func remoteRemember(_ text: Swift::String) throws -> RelayCore::RelayKnowledgeStore.RelayCore::RemoteRemember
+  @discardableResult
+  final public func remember(_ text: Swift::String, origin: Swift::String, author: Swift::String = "user", project: Swift::String? = nil) throws -> RelayCore::RelayKnowledgeStore.RelayCore::AddOutcome
+  @discardableResult
+  final public func capturePasted(_ text: Swift::String, title: Swift::String? = nil, tags: [Swift::String] = []) throws -> RelayCore::RelayKnowledgeStore.RelayCore::AddOutcome
+  @discardableResult
+  final public func captureFile(_ url: Foundation::URL) throws -> RelayCore::RelayKnowledgeStore.RelayCore::AddOutcome
+  @discardableResult
+  final public func captureWeb(url: Foundation::URL, title: Swift::String, text: Swift::String) throws -> RelayCore::RelayKnowledgeStore.RelayCore::AddOutcome
+}
+public enum RelayKnowledge {
+  public static let schemaVersion: Swift::Int
+  public static let localAccount: Swift::String
+  public static func directory(root: Foundation::URL, account: Swift::String = localAccount) -> Foundation::URL
+  public static func newID(_ prefix: Swift::String, at date: Foundation::Date = Date()) -> Swift::String
+  public static func sha256(_ text: Swift::String) -> Swift::String
+  public static func sha256(_ data: Foundation::Data) -> Swift::String
+  public static func fingerprint(title: Swift::String, body: Swift::String) -> Swift::String
+}
+public enum RelayKnowledgeCardType : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable, Swift::Identifiable {
+  case concept, qa, problem, project, video, skill, insight, delivery, review
+  case note
+  public var id: Swift::String {
+    get
+  }
+  public var label: Swift::String {
+    get
+  }
+  public var sections: [Swift::String] {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [RelayCore::RelayKnowledgeCardType]
+  public typealias ID = Swift::String
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [RelayCore::RelayKnowledgeCardType] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public enum RelayKnowledgeSourceKind : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+  case conversation, question, task, problem, video, repo, skill, file, web, note
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [RelayCore::RelayKnowledgeSourceKind]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [RelayCore::RelayKnowledgeSourceKind] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct RelayKnowledgeCard : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public var id: Swift::String
+  public var type: RelayCore::RelayKnowledgeCardType
+  public var title: Swift::String
+  public var tags: [Swift::String]
+  public var project: Swift::String?
+  public var sources: [Swift::String]
+  public var links: [Swift::String]
+  public var importance: Swift::Double
+  public var createdBy: Swift::String
+  public var revision: Swift::Int
+  public var createdAt: Foundation::Date
+  public var updatedAt: Foundation::Date
+  public var body: Swift::String
+  public var extra: [Swift::String]
+  public init(id: Swift::String = RelayKnowledge.newID("kc"), type: RelayCore::RelayKnowledgeCardType, title: Swift::String, tags: [Swift::String] = [], project: Swift::String? = nil, sources: [Swift::String] = [], links: [Swift::String] = [], importance: Swift::Double = 0.5, createdBy: Swift::String, revision: Swift::Int = 1, createdAt: Foundation::Date = Date(), updatedAt: Foundation::Date? = nil, body: Swift::String)
+  public var fingerprint: Swift::String {
+    get
+  }
+  public var relativePath: Swift::String {
+    get
+  }
+  public static func == (a: RelayCore::RelayKnowledgeCard, b: RelayCore::RelayKnowledgeCard) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayKnowledgeSource : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public var id: Swift::String
+  public var kind: RelayCore::RelayKnowledgeSourceKind
+  public var origin: Swift::String
+  public var capturedAt: Foundation::Date
+  public var author: Swift::String
+  public var contentPath: Swift::String
+  public var sha256: Swift::String
+  public var meta: [Swift::String : Swift::String]
+  public var allowedUse: Swift::String
+  public static func == (a: RelayCore::RelayKnowledgeSource, b: RelayCore::RelayKnowledgeSource) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayKnowledgeRevision : Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public enum Action : Swift::String, Swift::Sendable {
+    case create, update, merge, delete, externalEdit, undo
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var id: Swift::Int
+  public var batch: Swift::String
+  public var cardID: Swift::String
+  public var title: Swift::String
+  public var action: RelayCore::RelayKnowledgeRevision.RelayCore::Action
+  public var actor: Swift::String
+  public var reason: Swift::String
+  public var beforeRevision: Swift::Int?
+  public var afterRevision: Swift::Int?
+  public var beforeMarkdown: Swift::String?
+  public var afterMarkdown: Swift::String?
+  public var createdAt: Foundation::Date
+  public var undoneAt: Foundation::Date?
+  public static func == (a: RelayCore::RelayKnowledgeRevision, b: RelayCore::RelayKnowledgeRevision) -> Swift::Bool
+  public typealias ID = Swift::Int
+}
+public struct RelayKnowledgeEntry : Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String {
+    get
+  }
+  public var batch: Swift::String
+  public var action: RelayCore::RelayKnowledgeRevision.RelayCore::Action
+  public var actor: Swift::String
+  public var reason: Swift::String
+  public var titles: [Swift::String]
+  public var cardIDs: [Swift::String]
+  public var createdAt: Foundation::Date
+  public var undoneAt: Foundation::Date?
+  public var undoable: Swift::Bool
+  public static func == (a: RelayCore::RelayKnowledgeEntry, b: RelayCore::RelayKnowledgeEntry) -> Swift::Bool
+  public typealias ID = Swift::String
+}
+public struct RelayKnowledgeHit : Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String {
+    get
+  }
+  public var card: RelayCore::RelayKnowledgeCard
+  public var snippet: Swift::String
+  public init(card: RelayCore::RelayKnowledgeCard, snippet: Swift::String)
+  public static func == (a: RelayCore::RelayKnowledgeHit, b: RelayCore::RelayKnowledgeHit) -> Swift::Bool
+  public typealias ID = Swift::String
+}
+public enum RelayKnowledgeMarkdown {
+  public struct Malformed : Swift::Error, Foundation::LocalizedError {
+    public var reason: Swift::String
+    public var errorDescription: Swift::String? {
+      get
+    }
+  }
+  public static func render(_ card: RelayCore::RelayKnowledgeCard) -> Swift::String
+  public static func split(_ text: Swift::String) -> (header: [Swift::String], body: Swift::String)?
+  public static func parse(_ text: Swift::String) throws -> RelayCore::RelayKnowledgeCard
+  public static func slug(_ title: Swift::String) -> Swift::String
+}
+final public class RelayKnowledgeStore : @unchecked Swift::Sendable {
+  public enum Failure : Swift::Error, Foundation::LocalizedError, Swift::Equatable {
+    case locked, sqlite(Swift::String), invalid(Swift::String), notFound(Swift::String), conflict(Swift::String)
+    public var errorDescription: Swift::String? {
+      get
+    }
+    public static func == (a: RelayCore::RelayKnowledgeStore.RelayCore::Failure, b: RelayCore::RelayKnowledgeStore.RelayCore::Failure) -> Swift::Bool
+  }
+  public enum AddOutcome : Swift::Equatable {
+    case added(RelayCore::RelayKnowledgeCard)
+    case existing(RelayCore::RelayKnowledgeCard)
+    case blocked(Swift::String)
+    public var card: RelayCore::RelayKnowledgeCard? {
+      get
+    }
+    public static func == (a: RelayCore::RelayKnowledgeStore.RelayCore::AddOutcome, b: RelayCore::RelayKnowledgeStore.RelayCore::AddOutcome) -> Swift::Bool
+  }
+  public struct ReconcileReport : Swift::Equatable {
+    public var indexed: Swift::Int, updated: Swift::Int, removed: Swift::Int, adopted: Swift::Int, moved: Swift::Int
+    public var skipped: [Swift::String]
+    public var changed: Swift::Bool {
+      get
+    }
+    public static func == (a: RelayCore::RelayKnowledgeStore.RelayCore::ReconcileReport, b: RelayCore::RelayKnowledgeStore.RelayCore::ReconcileReport) -> Swift::Bool
+  }
+  final public let directory: Foundation::URL
+  final public let account: Swift::String
+  final public var changeCount: Swift::Int {
+    get
+  }
+  final public var onChange: (() -> Swift::Void)?
+  public init(root: Foundation::URL, account: Swift::String = RelayKnowledge.localAccount, redact: @escaping (Swift::String) -> Swift::String = { $0 }, now: @escaping () -> Foundation::Date = Date.init) throws
+  @objc deinit
+  @discardableResult
+  final public func addSource(kind: RelayCore::RelayKnowledgeSourceKind, origin: Swift::String, author: Swift::String, content: Swift::String, meta: [Swift::String : Swift::String] = [:]) throws -> RelayCore::RelayKnowledgeSource
+  @discardableResult
+  final public func add(_ draft: RelayCore::RelayKnowledgeCard, actor: Swift::String, explicit: Swift::Bool, reason: Swift::String) throws -> RelayCore::RelayKnowledgeStore.RelayCore::AddOutcome
+  @discardableResult
+  final public func update(_ id: Swift::String, actor: Swift::String, reason: Swift::String, _ edit: (inout RelayCore::RelayKnowledgeCard) -> Swift::Void) throws -> RelayCore::RelayKnowledgeCard
+  final public func delete(_ id: Swift::String, actor: Swift::String = "user", reason: Swift::String = "用户删除") throws
+  @discardableResult
+  final public func merge(_ otherID: Swift::String, into targetID: Swift::String, actor: Swift::String = "user", reason: Swift::String = "合并") throws -> RelayCore::RelayKnowledgeCard
+  final public func undo(_ batch: Swift::String, actor: Swift::String = "user") throws
+  @discardableResult
+  final public func reconcile() throws -> RelayCore::RelayKnowledgeStore.RelayCore::ReconcileReport
+  @discardableResult
+  final public func export(to destination: Foundation::URL) throws -> Foundation::URL
+  final public func card(_ id: Swift::String) -> RelayCore::RelayKnowledgeCard?
+  final public func cards(type: RelayCore::RelayKnowledgeCardType? = nil, tag: Swift::String? = nil, project: Swift::String? = nil, types: [RelayCore::RelayKnowledgeCardType]? = nil, limit: Swift::Int = 500) -> [RelayCore::RelayKnowledgeCard]
+  final public func search(_ query: Swift::String, type: RelayCore::RelayKnowledgeCardType? = nil, tag: Swift::String? = nil, project: Swift::String? = nil, types: [RelayCore::RelayKnowledgeCardType]? = nil, limit: Swift::Int = 50) -> [RelayCore::RelayKnowledgeHit]
+  final public func entries(limit: Swift::Int = 200) -> [RelayCore::RelayKnowledgeEntry]
+  final public func history(_ id: Swift::String) -> [RelayCore::RelayKnowledgeRevision]
+  final public func sources(of card: RelayCore::RelayKnowledgeCard) -> [(source: RelayCore::RelayKnowledgeSource, text: Swift::String)]
+  final public func related(_ id: Swift::String) -> [RelayCore::RelayKnowledgeCard]
+  final public func tagCounts() -> [(tag: Swift::String, count: Swift::Int)]
+  final public func projects() -> [Swift::String]
+  final public func typeCounts() -> [RelayCore::RelayKnowledgeCardType : Swift::Int]
+  final public var cardCount: Swift::Int {
+    get
+  }
+  final public func isTombstoned(_ fingerprint: Swift::String) -> Swift::Bool
+  final public func fileURL(_ card: RelayCore::RelayKnowledgeCard) -> Foundation::URL
+}
+public struct RelayTimeWindow : Swift::Codable, Swift::Equatable, Swift::Hashable, Swift::Sendable {
+  public var startMinute: Swift::Int
+  public var endMinute: Swift::Int
+  public var weekdays: Swift::Set<Swift::Int>
+  public init(startMinute: Swift::Int, endMinute: Swift::Int, weekdays: Swift::Set<Swift::Int> = Set(1...7))
+  public static func == (a: RelayCore::RelayTimeWindow, b: RelayCore::RelayTimeWindow) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayModelPolicy : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var connectionID: Swift::String
+  public var model: Swift::String
+  public var restrictHours: Swift::Bool
+  public var startMinute: Swift::Int
+  public var endMinute: Swift::Int
+  public var weekdays: Swift::Set<Swift::Int>
+  public var windows: [RelayCore::RelayTimeWindow]?
+  public var timeZone: Swift::String
+  public var maxCallSeconds: Swift::Int
+  public var cooldownSeconds: Swift::Int
+  public var automaticRetries: Swift::Int
+  public var note: Swift::String?
+  public var id: Swift::String {
+    get
+  }
+  public init(connectionID: Swift::String, model: Swift::String)
+  public static func key(connectionID: Swift::String, model: Swift::String) -> Swift::String
+  public var effectiveWindows: [RelayCore::RelayTimeWindow] {
+    get
+  }
+  public func validated() throws -> RelayCore::RelayModelPolicy
+  public static func offPeakDeepSeekWindows() -> [RelayCore::RelayTimeWindow]
+  public mutating func applyOffPeakDeepSeek()
+  public func permits(_ date: Foundation::Date) -> Swift::Bool
+  public func nextAllowed(after date: Foundation::Date) -> Foundation::Date?
+  public func secondsUntilWindowEnd(from date: Foundation::Date) -> Foundation::TimeInterval?
+  public func segment(at date: Foundation::Date) -> (open: Swift::Bool, start: Foundation::Date?, end: Foundation::Date?)
+  public static func == (a: RelayCore::RelayModelPolicy, b: RelayCore::RelayModelPolicy) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum RelayModelFailure : Swift::Equatable, Swift::Sendable {
+  case rateLimited, unavailable, authentication, other
+  public static func classify(_ message: Swift::String) -> RelayCore::RelayModelFailure
+  public static func == (a: RelayCore::RelayModelFailure, b: RelayCore::RelayModelFailure) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum RelayError : Swift::Error, Foundation::LocalizedError, Swift::Equatable {
+  case invalid(Swift::String)
+  case executor(Swift::String)
+  case timedOut
+  case stalled(Swift::Int)
+  case cancelled
+  case outputLimit
+  public var errorDescription: Swift::String? {
+    get
+  }
+  public static func == (a: RelayCore::RelayError, b: RelayCore::RelayError) -> Swift::Bool
+}
+public enum RelayProviderKind : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+  case claude
+  case codex
+  case deepseekHarness
+  case workbuddy
+  case opencode
+  case api
+  case doubaoApp
+  public var label: Swift::String {
+    get
+  }
+  public var symbol: Swift::String {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [RelayCore::RelayProviderKind]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [RelayCore::RelayProviderKind] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public enum RelayAPIKind : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+  case chatCompletions
+  case responses
+  case anthropic
+  public var label: Swift::String {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [RelayCore::RelayAPIKind]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [RelayCore::RelayAPIKind] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public enum RelayStage : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+  case planner, executor, tester, reviewer
+  public var label: Swift::String {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [RelayCore::RelayStage]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [RelayCore::RelayStage] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct RelayConnection : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var name: Swift::String
+  public var kind: RelayCore::RelayProviderKind
+  public var apiKind: RelayCore::RelayAPIKind
+  public var baseURL: Swift::String
+  public var keyEnvironment: Swift::String
+  public var binaryPath: Swift::String
+  public var requiresAuth: Swift::Bool
+  public var hasSecret: Swift::Bool
+  public var models: [Swift::String]
+  public var allowedModels: [Swift::String]?
+  public var maxConcurrentSessions: Swift::Int?
+  public var probeMessage: Swift::String?
+  public var probeOK: Swift::Bool?
+  public var transport: RelayCore::RelayConnectorTransport?
+  public var controlSocketPath: Swift::String?
+  public var revealInClient: Swift::Bool?
+  public var probedAt: Foundation::Date?
+  public var appConversationID: Swift::String?
+  public var appConversationTitle: Swift::String?
+  public var cliFallback: Swift::Bool?
+  public init(id: Swift::String = UUID().uuidString, name: Swift::String, kind: RelayCore::RelayProviderKind, apiKind: RelayCore::RelayAPIKind = .chatCompletions, baseURL: Swift::String = "", keyEnvironment: Swift::String = "", binaryPath: Swift::String = "", requiresAuth: Swift::Bool = true, hasSecret: Swift::Bool = false, models: [Swift::String] = [], probeMessage: Swift::String? = nil, probeOK: Swift::Bool? = nil)
+  public static func == (a: RelayCore::RelayConnection, b: RelayCore::RelayConnection) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayRole : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var name: Swift::String
+  public var stage: RelayCore::RelayStage
+  public var connectionID: Swift::String
+  public var model: Swift::String
+  public var prompt: Swift::String
+  public var enabled: Swift::Bool
+  public var color: Swift::String
+  public var effort: Swift::String
+  public var contextLimit: Swift::Int
+  public var outputLimit: Swift::Int
+  public var workHours: RelayCore::RelayWorkHours?
+  public var standIns: [Swift::String]?
+  public var fileAccess: RelayCore::RelayFileAccess?
+  public init(id: Swift::String = UUID().uuidString, name: Swift::String, stage: RelayCore::RelayStage, connectionID: Swift::String, model: Swift::String = "", prompt: Swift::String = "", enabled: Swift::Bool = true, color: Swift::String = "blue", effort: Swift::String = "default", contextLimit: Swift::Int = 128_000, outputLimit: Swift::Int = 8_192)
+  public var modelKey: Swift::String {
+    get
+  }
+  public func isOnDuty(at date: Foundation::Date = Date()) -> Swift::Bool
+  public var baseID: Swift::String {
+    get
+  }
+  public static func baseID(_ id: Swift::String) -> Swift::String
+  public static func == (a: RelayCore::RelayRole, b: RelayCore::RelayRole) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum RelayFileAccess : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+  case ask, full
+  public var label: Swift::String {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [RelayCore::RelayFileAccess]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [RelayCore::RelayFileAccess] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct RelayWorkHours : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var windows: [RelayCore::RelayTimeWindow]
+  public var timeZone: Swift::String
+  public init(windows: [RelayCore::RelayTimeWindow], timeZone: Swift::String = TimeZone.current.identifier)
+  public static var office: RelayCore::RelayWorkHours {
+    get
+  }
+  public func permits(_ date: Foundation::Date) -> Swift::Bool
+  public func nextAllowed(after date: Foundation::Date) -> Foundation::Date?
+  public func segment(at date: Foundation::Date) -> (open: Swift::Bool, start: Foundation::Date?, end: Foundation::Date?)
+  public func validated() throws -> RelayCore::RelayWorkHours
+  public static func == (a: RelayCore::RelayWorkHours, b: RelayCore::RelayWorkHours) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+extension RelayCore::RelayConnection {
+  public var selectableModels: [Swift::String] {
+    get
+  }
+  public func refusal(for model: Swift::String) -> Swift::String?
+}
+public struct RelayProject : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var name: Swift::String
+  public var path: Swift::String
+  public var expectedBranch: Swift::String
+  public var testCommand: Swift::String
+  public var testTimeoutSeconds: Swift::Int
+  public static let maxTestSeconds: Swift::Int
+  public var writableDirectories: [Swift::String]?
+  public var writableList: [Swift::String] {
+    get
+  }
+  public static func grantable(_ path: Swift::String) -> Swift::String?
+  public static func autoGrantable(_ path: Swift::String, project: Swift::String) -> Swift::Bool
+  public init(id: Swift::String = UUID().uuidString, name: Swift::String, path: Swift::String, expectedBranch: Swift::String = "", testCommand: Swift::String = "", testTimeoutSeconds: Swift::Int = 60)
+  public static func == (a: RelayCore::RelayProject, b: RelayCore::RelayProject) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum RelayRunStatus : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+  case queued, planning, executing, testing, reviewing, paused, succeeded, failed, cancelled, interrupted
+  case budgetExceeded
+  public var label: Swift::String {
+    get
+  }
+  public var isWorking: Swift::Bool {
+    get
+  }
+  public var holdsProject: Swift::Bool {
+    get
+  }
+  public var isTerminal: Swift::Bool {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [RelayCore::RelayRunStatus]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [RelayCore::RelayRunStatus] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public enum RelayPhase : Swift::String, Swift::Codable, Swift::Sendable {
+  case planning, execution, tests, quality, review, complete
+  public var label: Swift::String {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public enum RelayTaskStatus : Swift::String, Swift::Codable, Swift::Sendable {
+  case pending, running, paused, succeeded, failed
+  public var label: Swift::String {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct RelayPlannedTask : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var title: Swift::String
+  public var description: Swift::String
+  public var roleId: Swift::String
+  public var dependsOn: [Swift::String]
+  public var acceptance: [Swift::String]
+  public var stage: Swift::Int?
+  public init(id: Swift::String, title: Swift::String, description: Swift::String, roleId: Swift::String, dependsOn: [Swift::String] = [], acceptance: [Swift::String])
+  public static func == (a: RelayCore::RelayPlannedTask, b: RelayCore::RelayPlannedTask) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayMilestone : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public enum Status : Swift::String, Swift::Codable, Swift::Sendable {
+    case pending, active, done
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var id: Swift::String
+  public var title: Swift::String
+  public var goal: Swift::String
+  public var status: RelayCore::RelayMilestone.RelayCore::Status
+  public var summary: Swift::String?
+  public var completedAt: Foundation::Date?
+  public init(title: Swift::String, goal: Swift::String, status: RelayCore::RelayMilestone.RelayCore::Status = .pending)
+  public static func == (a: RelayCore::RelayMilestone, b: RelayCore::RelayMilestone) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayStagedPlan : Swift::Codable, Swift::Sendable {
+  public struct Stage : Swift::Codable, Swift::Sendable {
+    public var title: Swift::String
+    public var goal: Swift::String
+    public func encode(to encoder: any Swift::Encoder) throws
+    public init(from decoder: any Swift::Decoder) throws
+  }
+  public var summary: Swift::String
+  public var milestones: [RelayCore::RelayStagedPlan.RelayCore::Stage]?
+  public var tasks: [RelayCore::RelayPlannedTask]
+  public var plan: RelayCore::RelayPlan {
+    get
+  }
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayPlan : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var summary: Swift::String
+  public var tasks: [RelayCore::RelayPlannedTask]
+  public init(summary: Swift::String, tasks: [RelayCore::RelayPlannedTask])
+  public func validated(executorIDs: [Swift::String]) throws -> RelayCore::RelayPlan
+  public static func == (a: RelayCore::RelayPlan, b: RelayCore::RelayPlan) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayWorkItem : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var task: RelayCore::RelayPlannedTask
+  public var status: RelayCore::RelayTaskStatus
+  public var output: Swift::String
+  public var startedAt: Foundation::Date?
+  public var endedAt: Foundation::Date?
+  public var id: Swift::String {
+    get
+  }
+  public init(task: RelayCore::RelayPlannedTask)
+  public static func == (a: RelayCore::RelayWorkItem, b: RelayCore::RelayWorkItem) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayReview : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var passed: Swift::Bool
+  public var summary: Swift::String
+  public var issues: [Swift::String]
+  public init(passed: Swift::Bool, summary: Swift::String, issues: [Swift::String] = [])
+  public static func == (a: RelayCore::RelayReview, b: RelayCore::RelayReview) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayAttachment : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var path: Swift::String
+  public init(path: Swift::String)
+  public var name: Swift::String {
+    get
+  }
+  public static func == (a: RelayCore::RelayAttachment, b: RelayCore::RelayAttachment) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayInstruction : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var text: Swift::String
+  public var roleID: Swift::String?
+  public var createdAt: Foundation::Date
+  public init(text: Swift::String, roleID: Swift::String? = nil)
+  public static func == (a: RelayCore::RelayInstruction, b: RelayCore::RelayInstruction) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayRunInput : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public static let untitled: Swift::String
+  public var title: Swift::String
+  public var goal: Swift::String
+  public var projectID: Swift::String
+  public var plannerID: Swift::String
+  public var executorIDs: [Swift::String]
+  public var testerID: Swift::String
+  public var reviewerID: Swift::String
+  public var directRoleID: Swift::String?
+  public var budgetMinutes: Swift::Int
+  public var reworkLimit: Swift::Int
+  public var attachments: [RelayCore::RelayAttachment]
+  public var selectedSessions: [Swift::String : Swift::String]
+  public var groupID: Swift::String?
+  public var staged: Swift::Bool?
+  public var isStaged: Swift::Bool {
+    get
+  }
+  public init(title: Swift::String, goal: Swift::String, projectID: Swift::String, plannerID: Swift::String = "", executorIDs: [Swift::String] = [], testerID: Swift::String = "", reviewerID: Swift::String = "", directRoleID: Swift::String? = nil, budgetMinutes: Swift::Int = 30, reworkLimit: Swift::Int = 1, attachments: [RelayCore::RelayAttachment] = [], selectedSessions: [Swift::String : Swift::String] = [:], groupID: Swift::String? = nil, staged: Swift::Bool? = nil)
+  public static func == (a: RelayCore::RelayRunInput, b: RelayCore::RelayRunInput) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum RelayPauseReason : Swift::String, Swift::Codable, Swift::Sendable {
+  case schedule, unavailable, authentication, timeLimit, user, interrupted, sessionLimit
+  case awaitingUser, externalTurn
+  case milestone
+  case budget
+  case awaitingGoal
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct RelayPause : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var reason: RelayCore::RelayPauseReason
+  public var message: Swift::String
+  public var modelKey: Swift::String?
+  public var resumeAt: Foundation::Date?
+  public var automatic: Swift::Bool
+  public init(reason: RelayCore::RelayPauseReason, message: Swift::String, modelKey: Swift::String? = nil, resumeAt: Foundation::Date? = nil, automatic: Swift::Bool = false)
+  public static func == (a: RelayCore::RelayPause, b: RelayCore::RelayPause) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayRun : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var input: RelayCore::RelayRunInput
+  public var project: RelayCore::RelayProject
+  public var roles: [RelayCore::RelayRole]
+  public var connections: [RelayCore::RelayConnection]
+  public var status: RelayCore::RelayRunStatus
+  public var phase: RelayCore::RelayPhase
+  public var createdAt: Foundation::Date
+  public var startedAt: Foundation::Date?
+  public var endedAt: Foundation::Date?
+  public var activeSince: Foundation::Date?
+  public var lastHeartbeatAt: Foundation::Date?
+  public var activeSeconds: Swift::Double
+  public var root: Swift::String
+  public var branch: Swift::String
+  public var baseline: Swift::String
+  public var rules: Swift::String
+  public var plan: RelayCore::RelayPlan?
+  public var tasks: [RelayCore::RelayWorkItem]
+  public var currentRoleID: Swift::String?
+  public var currentTaskID: Swift::String?
+  public var pause: RelayCore::RelayPause?
+  public var attempts: [Swift::String : Swift::Int]
+  public var instructions: [RelayCore::RelayInstruction]
+  public var round: Swift::Int
+  public var feedback: Swift::String
+  public var quality: RelayCore::RelayReview?
+  public var review: RelayCore::RelayReview?
+  public var testExitCode: Swift::Int?
+  public var testOutput: Swift::String
+  public var inputTokens: Swift::Int
+  public var outputTokens: Swift::Int
+  public var cachedInputTokens: Swift::Int?
+  public var cacheWriteTokens: Swift::Int?
+  public var usage: RelayCore::RelayUsageTotals?
+  public var roleUsage: [Swift::String : RelayCore::RelayUsageTotals]?
+  public var legacyUsageUnattributed: Swift::Bool?
+  public var managedSessionIDs: [Swift::String : Swift::String]?
+  public var roleNotes: [Swift::String : Swift::String]?
+  public var waitingForSession: Swift::String?
+  public var pendingQuestion: RelayCore::RelayUserQuestion?
+  public var callRecords: [RelayCore::RelayCallRecord]?
+  public var externalTurnUnconfirmed: Swift::Bool?
+  public var output: Swift::String
+  public var error: Swift::String?
+  public var parentRunID: Swift::String?
+  public var roleSessions: [Swift::String : Swift::String]
+  public var sessionRecoveryAttempts: [Swift::String : Swift::Int]
+  public var newSessionAttempts: [Swift::String : Swift::Int]
+  public var archivedAt: Foundation::Date?
+  public var milestones: [RelayCore::RelayMilestone]?
+  public var activeMilestone: Swift::Int? {
+    get
+  }
+  public var nextMilestone: Swift::Int? {
+    get
+  }
+  public init(input: RelayCore::RelayRunInput, project: RelayCore::RelayProject, roles: [RelayCore::RelayRole], connections: [RelayCore::RelayConnection])
+  public func elapsed(at date: Foundation::Date = Date()) -> Foundation::TimeInterval
+  public var activityLabel: Swift::String {
+    get
+  }
+  public var finishedTasks: Swift::Int {
+    get
+  }
+  public var cacheReadTokens: Swift::Int {
+    get
+  }
+  public var totalTokens: Swift::Int {
+    get
+  }
+  public var cacheHitRate: Swift::Double {
+    get
+  }
+  public static func == (a: RelayCore::RelayRun, b: RelayCore::RelayRun) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayGroup : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var name: Swift::String
+  public var projectID: Swift::String
+  public var plannerID: Swift::String
+  public var executorIDs: [Swift::String]
+  public var testerID: Swift::String
+  public var reviewerID: Swift::String
+  public var createdAt: Foundation::Date
+  public init(id: Swift::String = UUID().uuidString, name: Swift::String, projectID: Swift::String, plannerID: Swift::String = "", executorIDs: [Swift::String] = [], testerID: Swift::String = "", reviewerID: Swift::String = "", createdAt: Foundation::Date = Date())
+  public static func == (a: RelayCore::RelayGroup, b: RelayCore::RelayGroup) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayRouting : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var coordinatorID: Swift::String
+  public var executorIDs: [Swift::String]
+  public var testerID: Swift::String
+  public var reviewerID: Swift::String
+  public var continueAttempts: Swift::Int
+  public var newSessionAttempts: Swift::Int
+  public var continueDelaySeconds: Swift::Int
+  public var codexTriesPerSession: Swift::Int?
+  public var codexNewSessions: Swift::Int?
+  public var maxConcurrentRuns: Swift::Int?
+  public var maxParallelTasks: Swift::Int?
+  public var sessionLimits: [Swift::String : Swift::Int]?
+  public var autoSwitchMembers: Swift::Bool?
+  public var switchAtQuota: Swift::Double?
+  public var switchBeforeOffMinutes: Swift::Int?
+  public var freshSessionAfterRun: Swift::Bool?
+  public var freshSessionAtTokens: Swift::Int?
+  public var freshSessionIdleMinutes: Swift::Int?
+  public var freshSessionDailyHour: Swift::Int?
+  public var claudeCompactPercent: Swift::Int?
+  public static let staleContextFloor: Swift::Int
+  public var compactPercent: Swift::Int? {
+    get
+  }
+  public func staleness(of slot: RelayCore::RelayManagedSession, now: Foundation::Date = Date(), calendar: Foundation::Calendar = .current) -> Swift::String?
+  public var freshSessionThreshold: Swift::Int? {
+    get
+  }
+  public func sessionLimit(for provider: RelayCore::RelayProviderKind) -> Swift::Int
+  public var handoffPrompt: Swift::String
+  public init()
+  public static func == (a: RelayCore::RelayRouting, b: RelayCore::RelayRouting) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayExternalSession : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var sessionID: Swift::String
+  public var provider: RelayCore::RelayProviderKind
+  public var title: Swift::String
+  public var projectPath: Swift::String
+  public var model: Swift::String
+  public var updatedAt: Foundation::Date
+  public var recordPath: Swift::String
+  public var isActive: Swift::Bool
+  public var id: Swift::String {
+    get
+  }
+  public init(sessionID: Swift::String, provider: RelayCore::RelayProviderKind, title: Swift::String, projectPath: Swift::String, model: Swift::String = "", updatedAt: Foundation::Date, recordPath: Swift::String, isActive: Swift::Bool = false)
+  public static func == (a: RelayCore::RelayExternalSession, b: RelayCore::RelayExternalSession) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public enum RelayEventKind : Swift::String, Swift::Codable, Swift::Sendable {
+  case status, text, tool, error, test, usage, input
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct RelayEvent : Swift::Codable, Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var runID: Swift::String
+  public var date: Foundation::Date
+  public var kind: RelayCore::RelayEventKind
+  public var message: Swift::String
+  public var roleID: Swift::String?
+  public var taskID: Swift::String?
+  public init(runID: Swift::String, kind: RelayCore::RelayEventKind, message: Swift::String, roleID: Swift::String? = nil, taskID: Swift::String? = nil)
+  public static func == (a: RelayCore::RelayEvent, b: RelayCore::RelayEvent) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayModelAvailability : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var key: Swift::String
+  public var pause: RelayCore::RelayPause
+  public var transport: Swift::String?
+  public init(key: Swift::String, pause: RelayCore::RelayPause, transport: Swift::String? = nil)
+  public func applies(to connection: RelayCore::RelayConnection?) -> Swift::Bool
+  public static func == (a: RelayCore::RelayModelAvailability, b: RelayCore::RelayModelAvailability) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayState : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var version: Swift::Int
+  public var connections: [RelayCore::RelayConnection]
+  public var roles: [RelayCore::RelayRole]
+  public var projects: [RelayCore::RelayProject]
+  public var runs: [RelayCore::RelayRun]
+  public var modelPolicies: [RelayCore::RelayModelPolicy]
+  public var modelAvailability: [RelayCore::RelayModelAvailability]
+  public var migrationNotice: Swift::String?
+  public var routing: RelayCore::RelayRouting
+  public var groups: [RelayCore::RelayGroup]?
+  public var groupList: [RelayCore::RelayGroup] {
+    get
+  }
+  public var managedSessions: [RelayCore::RelayManagedSession]?
+  public var sessionList: [RelayCore::RelayManagedSession] {
+    get
+  }
+  public init(connections: [RelayCore::RelayConnection], roles: [RelayCore::RelayRole])
+  public static func initial() -> RelayCore::RelayState
+  public static func == (a: RelayCore::RelayState, b: RelayCore::RelayState) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public protocol RelaySecretStorage : AnyObject {
+  func read(_ id: Swift::String) throws -> Swift::String?
+  func write(_ value: Swift::String?, for id: Swift::String) throws
+}
+final public class RelayKeychain : RelayCore::RelaySecretStorage {
+  public init(service: Swift::String = "local.relay.native.api-keys")
+  final public func read(_ id: Swift::String) throws -> Swift::String?
+  final public func write(_ value: Swift::String?, for id: Swift::String) throws
+  @objc deinit
+}
+public enum RelayJSON {
+  public static func encoder(pretty: Swift::Bool = false) -> Foundation::JSONEncoder
+  public static func decoder() -> Foundation::JSONDecoder
+  public static func text<T>(_ value: T) throws -> Swift::String where T : Swift::Encodable
+  public static func decodeOutput<T>(_ type: T.Type, _ output: Swift::String) throws -> T where T : Swift::Decodable
+}
+@_Concurrency::MainActor final public class RelayStore {
+  @_Concurrency::MainActor final public var state: RelayCore::RelayState {
+    get
+  }
+  @_Concurrency::MainActor final public var events: [Swift::String : [RelayCore::RelayEvent]] {
+    get
+  }
+  @_Concurrency::MainActor final public var lastError: Swift::String? {
+    get
+    set
+    _modify
+  }
+  @_Concurrency::MainActor final public let directory: Foundation::URL
+  @_Concurrency::MainActor final public let secrets: any RelayCore::RelaySecretStorage
+  @_Concurrency::MainActor public init(directory: Foundation::URL, secrets: any RelayCore::RelaySecretStorage = RelayKeychain(), legacyDirectory: Foundation::URL? = nil) throws
+  @_Concurrency::MainActor public static func validate(_ state: RelayCore::RelayState) throws
+  @_Concurrency::MainActor final public func commit(_ next: RelayCore::RelayState) throws
+  @_Concurrency::MainActor final public func run(_ id: Swift::String) throws -> RelayCore::RelayRun
+  @_Concurrency::MainActor final public func setArchived(_ id: Swift::String, _ archived: Swift::Bool) throws
+  @_Concurrency::MainActor final public func updateRun(_ id: Swift::String, _ transform: (RelayCore::RelayRun) throws -> RelayCore::RelayRun) throws
+  @_Concurrency::MainActor final public func addRun(_ run: RelayCore::RelayRun) throws
+  @_Concurrency::MainActor final public func saveConnection(_ connection: RelayCore::RelayConnection, secret: Swift::String? = nil, clearSecret: Swift::Bool = false) throws
+  @_Concurrency::MainActor final public func saveRole(_ role: RelayCore::RelayRole) throws
+  @_Concurrency::MainActor final public func deleteConnection(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func saveGroup(_ group: RelayCore::RelayGroup) throws
+  @_Concurrency::MainActor final public func deleteGroup(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func deleteRole(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func saveProject(_ project: RelayCore::RelayProject, allowNoTests: Swift::Bool = false) throws
+  @_Concurrency::MainActor final public func deleteProject(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func policy(for role: RelayCore::RelayRole) -> RelayCore::RelayModelPolicy
+  @_Concurrency::MainActor final public func savePolicy(_ policy: RelayCore::RelayModelPolicy) throws
+  @_Concurrency::MainActor final public func setAvailability(_ value: RelayCore::RelayModelAvailability) throws
+  @_Concurrency::MainActor final public func clearAvailability(_ key: Swift::String) throws
+  @_Concurrency::MainActor final public func secret(for connection: RelayCore::RelayConnection) -> Swift::String?
+  @_Concurrency::MainActor final public func redact(_ text: Swift::String) -> Swift::String
+  @_Concurrency::MainActor final public func appendEvent(_ event: RelayCore::RelayEvent) throws
+  @discardableResult
+  @_Concurrency::MainActor final public func loadEvents(_ id: Swift::String, fullHistory: Swift::Bool = false) throws -> [RelayCore::RelayEvent]
+  @objc deinit
+}
+extension RelayCore::RelayStore : nonisolated Observation::Observable {
+}
+public enum RelayEnvironment {
+  public static func child(extra: [Swift::String : Swift::String] = [:]) -> [Swift::String : Swift::String]
+}
+final public class RelayCancellation : @unchecked Swift::Sendable {
+  public init()
+  final public var reason: RelayCore::RelayError? {
+    get
+  }
+  final public func cancel(_ reason: RelayCore::RelayError = .cancelled)
+  @objc deinit
+}
+public struct RelayProcessResult : Swift::Sendable {
+  public var exitCode: Swift::Int
+  public var stdout: Swift::String
+  public var stderr: Swift::String
+  public init(exitCode: Swift::Int, stdout: Swift::String, stderr: Swift::String)
+}
+public struct RelayProcessRequest : Swift::Sendable {
+  public var command: Swift::String
+  public var arguments: [Swift::String]
+  public var directory: Swift::String
+  public var environment: [Swift::String : Swift::String]
+  public var input: Swift::String
+  public var timeout: Foundation::TimeInterval
+  public var idleTimeout: Foundation::TimeInterval?
+  public init(command: Swift::String, arguments: [Swift::String] = [], directory: Swift::String, environment: [Swift::String : Swift::String] = RelayEnvironment.child(), input: Swift::String = "", timeout: Foundation::TimeInterval = 60, idleTimeout: Foundation::TimeInterval? = nil)
+}
+final public class RelayProcessInput : @unchecked Swift::Sendable {
+  public init()
+  final public func send(_ text: Swift::String) throws
+  final public func close()
+  final public func onInterrupt(_ handler: @escaping @Sendable () -> Swift::Void)
+  @objc deinit
+}
+final public class RelayProcessRunner : @unchecked Swift::Sendable {
+  public init()
+  final public func run(_ request: RelayCore::RelayProcessRequest, cancellation: RelayCore::RelayCancellation = .init(), inputChannel: RelayCore::RelayProcessInput? = nil, onLine: @escaping @Sendable (Swift::String, Swift::Bool) -> Swift::Void = { _, _ in }) async throws -> RelayCore::RelayProcessResult
+  @objc deinit
+}
+public enum RelayProjectHints {
+  public static func testCommand(for path: Swift::String) -> Swift::String
+}
+public struct RelayAgentRequest : Swift::Sendable {
+  public var role: RelayCore::RelayRole
+  public var connection: RelayCore::RelayConnection
+  public var stage: RelayCore::RelayStage
+  public var directory: Swift::String
+  public var artifactDirectory: Foundation::URL
+  public var prompt: Swift::String
+  public var timeout: Foundation::TimeInterval
+  public var idleTimeout: Foundation::TimeInterval?
+  public var writableDirectories: [Swift::String]
+  public var schema: Swift::String?
+  public var sessionID: Swift::String?
+  public var compactPercent: Swift::Int?
+  public init(role: RelayCore::RelayRole, connection: RelayCore::RelayConnection, stage: RelayCore::RelayStage, directory: Swift::String, artifactDirectory: Foundation::URL, prompt: Swift::String, timeout: Foundation::TimeInterval, idleTimeout: Foundation::TimeInterval? = nil, schema: Swift::String? = nil, sessionID: Swift::String? = nil)
+}
+public struct RelayAgentResult : Swift::Sendable {
+  public var text: Swift::String
+  public var inputTokens: Swift::Int
+  public var outputTokens: Swift::Int
+  public var cachedInputTokens: Swift::Int
+  public var cacheWriteTokens: Swift::Int
+  public var usageReported: Swift::Bool
+  public var sessionID: Swift::String?
+  public var reportedModel: Swift::String?
+  public var reportedEffort: Swift::String?
+  public var question: RelayCore::RelayUserQuestion?
+  public var contextTokens: Swift::Int?
+  public init(text: Swift::String, inputTokens: Swift::Int = 0, outputTokens: Swift::Int = 0, cachedInputTokens: Swift::Int = 0, cacheWriteTokens: Swift::Int = 0, sessionID: Swift::String? = nil, usageReported: Swift::Bool = true)
+  public var usage: RelayCore::RelayTokenUsage {
+    get
+  }
+}
+@_Concurrency::MainActor public protocol RelayAgentExecuting {
+  @_Concurrency::MainActor func preflight(_ role: RelayCore::RelayRole, connection: RelayCore::RelayConnection) async throws
+  @_Concurrency::MainActor func execute(_ request: RelayCore::RelayAgentRequest, emit: @escaping @_Concurrency::MainActor (RelayCore::RelayEventKind, Swift::String) -> Swift::Void, session: @escaping @_Concurrency::MainActor (Swift::String) -> Swift::Void) async throws -> RelayCore::RelayAgentResult
+}
+public struct RelayModelCatalog : Swift::Sendable {
+  public var ids: [Swift::String]
+  public var source: Swift::String
+  public var file: Foundation::URL?
+}
+@_Concurrency::MainActor final public class RelayProviders : RelayCore::RelayAgentExecuting {
+  @_Concurrency::MainActor public init(store: RelayCore::RelayStore, sidecars: Foundation::URL, process: RelayCore::RelayProcessRunner = .init())
+  @_Concurrency::MainActor final public var doubao: RelayCore::RelayDoubaoApp {
+    get
+  }
+  @_Concurrency::MainActor final public var workBuddyApp: RelayCore::RelayWorkBuddyApp {
+    get
+  }
+  @_Concurrency::MainActor final public func binary(_ connection: RelayCore::RelayConnection) throws -> Swift::String
+  @_Concurrency::MainActor final public func preflight(_ role: RelayCore::RelayRole, connection: RelayCore::RelayConnection) async throws
+  @_Concurrency::MainActor final public func probe(_ connection: RelayCore::RelayConnection) async throws -> Swift::String
+  @_Concurrency::MainActor final public func models(_ connection: RelayCore::RelayConnection) async throws -> RelayCore::RelayModelCatalog
+  nonisolated public static func buddyCatalog(home: Foundation::URL = FileManager.default.homeDirectoryForCurrentUser, bundled: Foundation::URL = URL(fileURLWithPath: "/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/product.json")) throws -> RelayCore::RelayModelCatalog
+  nonisolated public static func buddyModelNotes(home: Foundation::URL = FileManager.default.homeDirectoryForCurrentUser) -> [Swift::String : Swift::String]
+  @_Concurrency::MainActor final public func execute(_ request: RelayCore::RelayAgentRequest, emit: @escaping @_Concurrency::MainActor (RelayCore::RelayEventKind, Swift::String) -> Swift::Void, session: @escaping @_Concurrency::MainActor (Swift::String) -> Swift::Void) async throws -> RelayCore::RelayAgentResult
+  @objc deinit
+}
+final public class RelayEventCollector : @unchecked Swift::Sendable {
+  public enum Signal {
+    case event(RelayCore::RelayEventKind, Swift::String), session(Swift::String)
+  }
+  public struct Result {
+    public var text: Swift::String
+    public var input: Swift::Int
+    public var output: Swift::Int
+    public var cached: Swift::Int
+    public var cacheWrite: Swift::Int
+    public var usageReported: Swift::Bool
+    public var sessionID: Swift::String?
+    public var error: Swift::String
+    public var completed: Swift::Bool
+    public var reportedModel: Swift::String?
+    public var question: RelayCore::RelayUserQuestion?
+    public var contextTokens: Swift::Int?
+  }
+  public init(kind: RelayCore::RelayProviderKind)
+  final public func result() -> RelayCore::RelayEventCollector.RelayCore::Result
+  final public func consume(_ line: Swift::String, stderr: Swift::Bool) -> [RelayCore::RelayEventCollector.RelayCore::Signal]
+  @objc deinit
+}
+final public class RelayQuotaBoard : @unchecked Swift::Sendable {
+  public struct Window : Swift::Equatable, Swift::Sendable {
+    public var name: Swift::String
+    public var usedFraction: Swift::Double
+    public var resetsAt: Foundation::Date?
+    public var exhausted: Swift::Bool
+    public init(name: Swift::String, usedFraction: Swift::Double, resetsAt: Foundation::Date?, exhausted: Swift::Bool)
+    public var isSpent: Swift::Bool {
+      get
+    }
+    public static func == (a: RelayCore::RelayQuotaBoard.RelayCore::Window, b: RelayCore::RelayQuotaBoard.RelayCore::Window) -> Swift::Bool
+  }
+  public init()
+  final public func update(_ kind: RelayCore::RelayProviderKind, _ next: [RelayCore::RelayQuotaBoard.RelayCore::Window])
+  final public func windows(for kind: RelayCore::RelayProviderKind) -> [RelayCore::RelayQuotaBoard.RelayCore::Window]
+  final public func reset(for kind: RelayCore::RelayProviderKind, now: Foundation::Date = Date()) -> Foundation::Date?
+  @objc deinit
+}
+public enum RelaySandboxHint {
+  public static func deniedDirectories(in texts: [Swift::String], run: RelayCore::RelayRun) -> [Swift::String]
+  public static func directories(for run: RelayCore::RelayRun, events: [RelayCore::RelayEvent]) -> [Swift::String]
+}
+@_Concurrency::MainActor final public class RelayScheduler {
+  @_Concurrency::MainActor final public var activeIDs: Swift::Set<Swift::String> {
+    get
+  }
+  @_Concurrency::MainActor final public let sessions: RelayCore::RelaySessionPool
+  @_Concurrency::MainActor final public var onAttention: ((RelayCore::RelayRun) -> Swift::Void)? {
+    get
+    set
+    _modify
+  }
+  @_Concurrency::MainActor final public var onFinished: ((RelayCore::RelayRun) -> Swift::Void)? {
+    get
+    set
+    _modify
+  }
+  @_Concurrency::MainActor final public var onSession: ((RelayCore::RelayConnection, Swift::String) -> Swift::Void)? {
+    get
+    set
+    _modify
+  }
+  @_Concurrency::MainActor final public var automationGuide: (() -> Swift::String?)? {
+    get
+    set
+    _modify
+  }
+  @_Concurrency::MainActor final public let quota: RelayCore::RelayQuotaBoard
+  @_Concurrency::MainActor public init(store: RelayCore::RelayStore, executor: any RelayCore::RelayAgentExecuting, workspace: any RelayCore::RelayWorkspaceIO = RelayWorkspace())
+  @_Concurrency::MainActor final public func start()
+  @_Concurrency::MainActor final public func create(_ input: RelayCore::RelayRunInput) async throws -> RelayCore::RelayRun
+  @_Concurrency::MainActor final public func pause(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func resume(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func extendBudget(_ id: Swift::String, minutes: Swift::Int?) throws
+  @_Concurrency::MainActor public static let maxBudgetMinutes: Swift::Int
+  @_Concurrency::MainActor final public func continueFailed(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func confirmMilestone(_ id: Swift::String, goal: Swift::String?) throws
+  @_Concurrency::MainActor final public func endAtMilestone(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func stop(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func confirmExternalStopped(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func retry(_ id: Swift::String) async throws -> RelayCore::RelayRun
+  @_Concurrency::MainActor final public func instructAndContinue(_ id: Swift::String, text: Swift::String, roleID: Swift::String?) throws
+  @_Concurrency::MainActor final public func addInstruction(_ id: Swift::String, text: Swift::String, roleID: Swift::String?) throws
+  @_Concurrency::MainActor final public func answer(_ id: Swift::String, questionID: Swift::String, text: Swift::String) throws
+  @_Concurrency::MainActor final public func grantWritable(_ id: Swift::String, path: Swift::String, remember: Swift::Bool) throws
+  @_Concurrency::MainActor final public func reconfigureRole(_ id: Swift::String, roleID: Swift::String, model: Swift::String, effort: Swift::String, saveAsDefault: Swift::Bool) async throws
+  @discardableResult
+  @_Concurrency::MainActor final public func addMember(_ id: Swift::String, roleID: Swift::String, title: Swift::String, description: Swift::String, dependsOn: [Swift::String] = []) async throws -> Swift::String
+  @discardableResult
+  @_Concurrency::MainActor final public func reassignTask(_ id: Swift::String, taskID: Swift::String, roleID: Swift::String, newSession: Swift::Bool = false) async throws -> Swift::String
+  @discardableResult
+  @_Concurrency::MainActor final public func replaceMember(_ id: Swift::String, stage: RelayCore::RelayStage, from oldID: Swift::String, to newID: Swift::String) async throws -> Swift::String
+  @discardableResult
+  @_Concurrency::MainActor final public func removeMember(_ id: Swift::String, roleID: Swift::String) async throws -> Swift::String
+  @_Concurrency::MainActor final public func updateMember(_ id: Swift::String, role edited: RelayCore::RelayRole, saveAsDefault: Swift::Bool) async throws
+  @_Concurrency::MainActor final public func switchConnection(_ id: Swift::String, roleID: Swift::String, connectionID: Swift::String, model: Swift::String) async throws
+  @_Concurrency::MainActor final public func shutdown() async
+  public struct SeatConflict : Swift::Sendable {
+    public var role: RelayCore::RelayRole
+    public var stage: RelayCore::RelayStage
+    public var needed: RelayCore::RelaySessionKey
+    public var holder: RelayCore::RelayManagedSession
+    public var holderBusy: Swift::Bool
+    public var holderRuns: [Swift::String]
+  }
+  @_Concurrency::MainActor final public func seatConflict(_ id: Swift::String) -> RelayCore::RelayScheduler.RelayCore::SeatConflict?
+  @_Concurrency::MainActor final public func releaseSeat(for id: Swift::String) throws
+  @_Concurrency::MainActor final public func reserveCall(_ connection: RelayCore::RelayConnection) -> Swift::Bool
+  @_Concurrency::MainActor final public func releaseCall(_ connection: RelayCore::RelayConnection)
+  @objc deinit
+}
+public enum RelayRecovery {
+  public static func isSessionFailure(_ message: Swift::String) -> Swift::Bool
+  public static func isTransientFailure(_ message: Swift::String) -> Swift::Bool
+  public static let transientRetries: Swift::Int
+  public static let permissionDeniedPrefix: Swift::String
+  public static let permissionDeniedRetries: Swift::Int
+  public static func permissionDeniedPrompt(_ message: Swift::String) -> Swift::String
+  public static func isSubscriptionLimit(_ message: Swift::String) -> Swift::Bool
+  public static func subscriptionReset(_ message: Swift::String, now: Foundation::Date = Date()) -> Foundation::Date?
+  public static func isQuotaFailure(_ message: Swift::String) -> Swift::Bool
+  public static func handoff(run: RelayCore::RelayRun, role: RelayCore::RelayRole, reason: Swift::String, template: Swift::String) throws -> Swift::String
+}
+public enum RelaySchemas {
+  public static let plan: Swift::String
+  public static let stagedPlan: Swift::String
+  public static let review: Swift::String
+}
+extension RelayCore::RelayScheduler : nonisolated Observation::Observable {
+}
+public enum RelaySessionPurpose : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+  case document, execution
+  public init(stage: RelayCore::RelayStage)
+  public var label: Swift::String {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [RelayCore::RelaySessionPurpose]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [RelayCore::RelaySessionPurpose] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct RelaySessionKey : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var connectionID: Swift::String
+  public var provider: RelayCore::RelayProviderKind
+  public var projectPath: Swift::String
+  public var model: Swift::String
+  public var purpose: RelayCore::RelaySessionPurpose
+  public init(role: RelayCore::RelayRole, connection: RelayCore::RelayConnection, projectPath: Swift::String, stage: RelayCore::RelayStage)
+  public static func path(_ value: Swift::String) -> Swift::String
+  public static func binding(roleID: Swift::String, stage: RelayCore::RelayStage) -> Swift::String
+  public static func == (a: RelayCore::RelaySessionKey, b: RelayCore::RelaySessionKey) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelaySessionCheckpoint : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var runID: Swift::String
+  public var hashes: [Swift::String : Swift::String]
+  public static func == (a: RelayCore::RelaySessionCheckpoint, b: RelayCore::RelaySessionCheckpoint) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayManagedSession : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public var id: Swift::String
+  public var key: RelayCore::RelaySessionKey
+  public var clientSessionID: Swift::String?
+  public var previousSessionIDs: [Swift::String]
+  public var createdAt: Foundation::Date
+  public var lastUsedAt: Foundation::Date?
+  public var retiredAt: Foundation::Date?
+  public var replacementRequested: Swift::Bool
+  public var parked: Swift::Bool?
+  public var contextTokens: Swift::Int?
+  public var checkpoint: RelayCore::RelaySessionCheckpoint?
+  public var usage: RelayCore::RelayUsageTotals
+  public init(key: RelayCore::RelaySessionKey, clientSessionID: Swift::String? = nil)
+  public static func == (a: RelayCore::RelayManagedSession, b: RelayCore::RelayManagedSession) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelaySessionLease : Swift::Sendable {
+  public let id: Swift::String
+  public let slotID: Swift::String
+  public let sessionID: Swift::String?
+  public let checkpoint: RelayCore::RelaySessionCheckpoint?
+}
+public enum RelaySessionPoolError : Swift::Error, Foundation::LocalizedError, Swift::Equatable {
+  case busy
+  case capacity(Swift::String)
+  public var errorDescription: Swift::String? {
+    get
+  }
+  public static func == (a: RelayCore::RelaySessionPoolError, b: RelayCore::RelaySessionPoolError) -> Swift::Bool
+}
+@_Concurrency::MainActor final public class RelaySessionPool {
+  @_Concurrency::MainActor final public var busyIDs: Swift::Set<Swift::String> {
+    get
+  }
+  @_Concurrency::MainActor public init(store: RelayCore::RelayStore)
+  @discardableResult
+  @_Concurrency::MainActor final public func reserve(_ key: RelayCore::RelaySessionKey, preferredID: Swift::String? = nil) throws -> RelayCore::RelayManagedSession
+  @_Concurrency::MainActor final public func acquire(_ key: RelayCore::RelaySessionKey, preferredID: Swift::String? = nil) throws -> RelayCore::RelaySessionLease
+  @_Concurrency::MainActor final public func isCurrent(_ lease: RelayCore::RelaySessionLease) -> Swift::Bool
+  @_Concurrency::MainActor final public func release(_ lease: RelayCore::RelaySessionLease)
+  @discardableResult
+  @_Concurrency::MainActor final public func attach(_ clientID: Swift::String, to lease: RelayCore::RelaySessionLease) throws -> Swift::Bool
+  @_Concurrency::MainActor final public func requestReplacement(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func cancelReplacement(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func retire(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func holder(for key: RelayCore::RelaySessionKey) -> RelayCore::RelayManagedSession?
+  @_Concurrency::MainActor final public func evictable(for key: RelayCore::RelaySessionKey) -> RelayCore::RelayManagedSession?
+  @_Concurrency::MainActor final public func park(_ id: Swift::String) throws
+  @_Concurrency::MainActor final public func forget(_ ids: Swift::Set<Swift::String>) throws
+  @_Concurrency::MainActor final public func capacityIssue(for key: RelayCore::RelaySessionKey) -> Swift::String?
+  @_Concurrency::MainActor final public func isUnconfirmed(_ id: Swift::String) -> Swift::Bool
+  nonisolated public static func validateClientID(_ id: Swift::String) throws
+  @objc deinit
+}
+extension RelayCore::RelaySessionPool : nonisolated Observation::Observable {
+}
+public enum RelaySharedSkills {
+  public static func sources(home: Foundation::URL = FileManager.default.homeDirectoryForCurrentUser) -> [Foundation::URL]
+  @discardableResult
+  public static func claudePlugin(dataDirectory: Foundation::URL, home: Foundation::URL = FileManager.default.homeDirectoryForCurrentUser) -> Swift::String?
+}
+public enum RelayLightGeometry {
+  public static let flightSeconds: Swift::Double
+  public static let landingSeconds: Swift::Double
+  public static let borderSeconds: Swift::Double
+  public struct Curve : Swift::Equatable, Swift::Sendable {
+    public let a: CoreFoundation::CGPoint, c1: CoreFoundation::CGPoint, c2: CoreFoundation::CGPoint, b: CoreFoundation::CGPoint
+    public init(a: CoreFoundation::CGPoint, c1: CoreFoundation::CGPoint, c2: CoreFoundation::CGPoint, b: CoreFoundation::CGPoint)
+    public func point(_ t: CoreFoundation::CGFloat) -> CoreFoundation::CGPoint
+    public func length(to end: CoreFoundation::CGFloat = 1) -> CoreFoundation::CGFloat
+    public static func == (a: RelayCore::RelayLightGeometry.RelayCore::Curve, b: RelayCore::RelayLightGeometry.RelayCore::Curve) -> Swift::Bool
+  }
+  public struct Flight : Swift::Equatable, Swift::Sendable {
+    public let head: CoreFoundation::CGPoint
+    public let tail: CoreFoundation::CGPoint
+    public let startFraction: CoreFoundation::CGFloat
+    public let endFraction: CoreFoundation::CGFloat
+    public static func == (a: RelayCore::RelayLightGeometry.RelayCore::Flight, b: RelayCore::RelayLightGeometry.RelayCore::Flight) -> Swift::Bool
+  }
+  public static func smoothstep(_ value: CoreFoundation::CGFloat) -> CoreFoundation::CGFloat
+  public static func curve(from a: CoreFoundation::CGPoint, to b: CoreFoundation::CGPoint, seed: CoreFoundation::CGFloat) -> RelayCore::RelayLightGeometry.RelayCore::Curve
+  public static func flight(_ curve: RelayCore::RelayLightGeometry.RelayCore::Curve, progress: CoreFoundation::CGFloat) -> RelayCore::RelayLightGeometry.RelayCore::Flight
+}
+public struct RelayLightTracker : Swift::Sendable {
+  public init()
+  public mutating func observe(_ ids: [Swift::String], ready: Swift::Bool) -> [Swift::String]
+}
+public struct RelayTimelineTurn : Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var roleID: Swift::String?
+  public var taskID: Swift::String?
+  public var events: [RelayCore::RelayEvent]
+  public var isLast: Swift::Bool
+  public static func == (a: RelayCore::RelayTimelineTurn, b: RelayCore::RelayTimelineTurn) -> Swift::Bool
+}
+public enum RelayTimelineItem : Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  case user(id: Swift::String, text: Swift::String, date: Foundation::Date)
+  case status(RelayCore::RelayEvent)
+  case turn(RelayCore::RelayTimelineTurn)
+  public var id: Swift::String {
+    get
+  }
+  public static func == (a: RelayCore::RelayTimelineItem, b: RelayCore::RelayTimelineItem) -> Swift::Bool
+  public typealias ID = Swift::String
+}
+public enum RelayRunTimeline {
+  public static func items(run: RelayCore::RelayRun, events: [RelayCore::RelayEvent]) -> [RelayCore::RelayTimelineItem]
+}
+public struct RelayTrajectoryLane : Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var title: Swift::String
+  public var subtitle: Swift::String
+  public var colorName: Swift::String
+  public init(id: Swift::String, title: Swift::String, subtitle: Swift::String, colorName: Swift::String)
+  public static func == (a: RelayCore::RelayTrajectoryLane, b: RelayCore::RelayTrajectoryLane) -> Swift::Bool
+  public typealias ID = Swift::String
+}
+public struct RelayTrajectoryNode : Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var laneID: Swift::String
+  public var kind: RelayCore::RelayTrajectoryKind
+  public var title: Swift::String
+  public var detail: Swift::String
+  public var date: Foundation::Date
+  public var row: Swift::Int
+  public var threadItemID: Swift::String?
+  public var running: Swift::Bool
+  public var eventIDs: [Swift::String]
+  public init(id: Swift::String, laneID: Swift::String, kind: RelayCore::RelayTrajectoryKind, title: Swift::String, detail: Swift::String, date: Foundation::Date, row: Swift::Int, threadItemID: Swift::String? = nil, running: Swift::Bool = false, eventIDs: [Swift::String] = [])
+  public static func == (a: RelayCore::RelayTrajectoryNode, b: RelayCore::RelayTrajectoryNode) -> Swift::Bool
+  public typealias ID = Swift::String
+}
+public struct RelayTrajectoryEdge : Swift::Equatable, Swift::Sendable {
+  public var from: Swift::String
+  public var to: Swift::String
+  public init(from: Swift::String, to: Swift::String)
+  public static func == (a: RelayCore::RelayTrajectoryEdge, b: RelayCore::RelayTrajectoryEdge) -> Swift::Bool
+}
+public struct RelayTrajectory : Swift::Equatable, Swift::Sendable {
+  public static let youLane: Swift::String
+  public static let systemLane: Swift::String
+  public var lanes: [RelayCore::RelayTrajectoryLane]
+  public var nodes: [RelayCore::RelayTrajectoryNode]
+  public var edges: [RelayCore::RelayTrajectoryEdge]
+  public var records: [RelayCore::RelayTrajectoryRecord]
+  public var isEmpty: Swift::Bool {
+    get
+  }
+  public func laneIndex(_ id: Swift::String) -> Swift::Int?
+  public static func build(run: RelayCore::RelayRun, events: [RelayCore::RelayEvent]) -> RelayCore::RelayTrajectory
+  public static func == (a: RelayCore::RelayTrajectory, b: RelayCore::RelayTrajectory) -> Swift::Bool
+}
+public struct RelayTrajectoryLayout : Swift::Sendable {
+  public var laneWidth: CoreFoundation::CGFloat
+  public var rowPitch: CoreFoundation::CGFloat
+  public var nodeWidth: CoreFoundation::CGFloat
+  public var nodeHeight: CoreFoundation::CGFloat
+  public var headerHeight: CoreFoundation::CGFloat
+  public init(laneWidth: CoreFoundation::CGFloat = 112, rowPitch: CoreFoundation::CGFloat = 34, nodeWidth: CoreFoundation::CGFloat = 100, nodeHeight: CoreFoundation::CGFloat = 22, headerHeight: CoreFoundation::CGFloat = 32)
+  public func center(lane: Swift::Int, row: Swift::Int) -> CoreFoundation::CGPoint
+  public func size(laneCount: Swift::Int, rowCount: Swift::Int) -> CoreFoundation::CGSize
+}
+public enum RelayTrajectoryKind : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+  case goal, input, reply, tool, edit, test, error, status
+  case commit, handoff, checkpoint, testPassed, testFailed, review, fork, merge, artifact
+  case switchModel, compact, wait, reference, retry
+  public static let lancerLegend: [RelayCore::RelayTrajectoryKind]
+  public var label: Swift::String {
+    get
+  }
+  public var symbol: Swift::String {
+    get
+  }
+  public var detail: Swift::String {
+    get
+  }
+  public static func classify(_ event: RelayCore::RelayEvent) -> RelayCore::RelayTrajectoryKind
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [RelayCore::RelayTrajectoryKind]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [RelayCore::RelayTrajectoryKind] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct RelayTrajectoryRecord : Swift::Identifiable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var nodeID: Swift::String?
+  public var laneID: Swift::String?
+  public var threadItemID: Swift::String
+  public var kind: RelayCore::RelayTrajectoryKind
+  public var date: Foundation::Date
+  public var message: Swift::String
+  public var sourceEvent: RelayCore::RelayEvent?
+  public static func == (a: RelayCore::RelayTrajectoryRecord, b: RelayCore::RelayTrajectoryRecord) -> Swift::Bool
+  public typealias ID = Swift::String
+}
+public struct RelayTokenUsage : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var input: Swift::Int
+  public var cacheRead: Swift::Int
+  public var cacheWrite: Swift::Int
+  public var output: Swift::Int
+  public init(input: Swift::Int = 0, cacheRead: Swift::Int = 0, cacheWrite: Swift::Int = 0, output: Swift::Int = 0)
+  public var totalInput: Swift::Int {
+    get
+  }
+  public var total: Swift::Int {
+    get
+  }
+  public var cacheHitRate: Swift::Double? {
+    get
+  }
+  public func adding(_ other: RelayCore::RelayTokenUsage) -> RelayCore::RelayTokenUsage
+  public static func == (a: RelayCore::RelayTokenUsage, b: RelayCore::RelayTokenUsage) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayUsageTotals : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var tokens: RelayCore::RelayTokenUsage
+  public var calls: Swift::Int
+  public var failedCalls: Swift::Int
+  public var newSessions: Swift::Int
+  public var resumedCalls: Swift::Int
+  public var unreportedCalls: Swift::Int
+  public init()
+  public func adding(_ other: RelayCore::RelayUsageTotals) -> RelayCore::RelayUsageTotals
+  public static func role(_ id: Swift::String, runs: [RelayCore::RelayRun]) -> RelayCore::RelayUsageTotals?
+  public static func overall(runs: [RelayCore::RelayRun]) -> RelayCore::RelayUsageTotals
+  public static func == (a: RelayCore::RelayUsageTotals, b: RelayCore::RelayUsageTotals) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayExecutionFailure : Swift::Error, Foundation::LocalizedError {
+  public let cause: any Swift::Error
+  public let result: RelayCore::RelayAgentResult
+  public init(cause: any Swift::Error, result: RelayCore::RelayAgentResult)
+  public var errorDescription: Swift::String? {
+    get
+  }
+}
+public struct RelayWorkBuddySnapshot : Swift::Decodable, Swift::Sendable {
+  public struct Message : Swift::Decodable, Swift::Sendable, Swift::Equatable {
+    public var role: Swift::String
+    public var text: Swift::String
+    public static func == (a: RelayCore::RelayWorkBuddySnapshot.RelayCore::Message, b: RelayCore::RelayWorkBuddySnapshot.RelayCore::Message) -> Swift::Bool
+    public init(from decoder: any Swift::Decoder) throws
+  }
+  public var ok: Swift::Bool
+  public var error: Swift::String?
+  public var view: Swift::String
+  public var title: Swift::String
+  public var project: Swift::String
+  public var model: Swift::String
+  public var messages: [RelayCore::RelayWorkBuddySnapshot.RelayCore::Message]
+  public var busy: Swift::Bool
+  public var finished: Swift::Bool
+  public var sent: Swift::Bool?
+  public var lastAnswer: Swift::String {
+    get
+  }
+  public init(from decoder: any Swift::Decoder) throws
+}
+@_Concurrency::MainActor final public class RelayWorkBuddyApp {
+  @_Concurrency::MainActor public static let bundleID: Swift::String
+  @_Concurrency::MainActor public init(runner: RelayCore::RelayProcessRunner = .init(), sidecars: Foundation::URL, dataDirectory: Foundation::URL)
+  @_Concurrency::MainActor final public func helperOrThrow() throws -> Swift::String
+  @_Concurrency::MainActor final public func probe(_ connection: RelayCore::RelayConnection) async throws -> Swift::String
+  @_Concurrency::MainActor final public func execute(_ request: RelayCore::RelayAgentRequest, emit: @escaping @_Concurrency::MainActor (RelayCore::RelayEventKind, Swift::String) -> Swift::Void, session: @escaping @_Concurrency::MainActor (Swift::String) -> Swift::Void) async throws -> RelayCore::RelayAgentResult
+  nonisolated public static func explain(_ code: Swift::String) -> Swift::String
+  @objc deinit
+}
+public struct RelayCheckpointStore : Swift::Sendable {
+  public enum Scope : Swift::String, Swift::CaseIterable, Swift::Sendable {
+    case lastTurn, uncommitted, staged, unstaged, branch
+    public var label: Swift::String {
+      get
+    }
+    public init?(rawValue: Swift::String)
+    public typealias AllCases = [RelayCore::RelayCheckpointStore.RelayCore::Scope]
+    public typealias RawValue = Swift::String
+    nonisolated public static var allCases: [RelayCore::RelayCheckpointStore.RelayCore::Scope] {
+      get
+    }
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public struct Limits : Swift::Sendable {
+    public var maxFiles: Swift::Int
+    public var maxFileBytes: Swift::Int
+    public var maxBytes: Swift::Int
+    public init()
+  }
+  public let repository: Foundation::URL
+  public var limits: RelayCore::RelayCheckpointStore.RelayCore::Limits
+  public init(directory: Foundation::URL)
+  public func capture(_ workspace: Swift::String) throws -> (tree: Swift::String, exclusions: [Swift::String])
+  public func diff(_ scope: RelayCore::RelayCheckpointStore.RelayCore::Scope, workspace: Swift::String, checkpoint: RelayCore::RelayTurnCheckpoint?, base: Swift::String? = nil) throws -> Swift::String
+  public static func files(of patch: Swift::String) -> [(path: Swift::String, added: Swift::Int, removed: Swift::Int)]
+}
+public struct RelayAutomationCall : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var module: Swift::String
+  public var project: Swift::String?
+  public var params: [Swift::String : Swift::String]?
+  public static func parse(_ text: Swift::String) -> (call: RelayCore::RelayAutomationCall, rest: Swift::String)?
+  public static func command(_ text: Swift::String) -> Swift::String?
+  public static func == (a: RelayCore::RelayAutomationCall, b: RelayCore::RelayAutomationCall) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayTaskDispatchSpec : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var title: Swift::String
+  public var goal: Swift::String
+  public var project: Swift::String?
+  public var newProject: Swift::Bool?
+  public var members: [Swift::String]?
+  public var staged: Swift::Bool?
+  public static func parse(_ text: Swift::String) -> (spec: RelayCore::RelayTaskDispatchSpec, rest: Swift::String)?
+  public static func == (a: RelayCore::RelayTaskDispatchSpec, b: RelayCore::RelayTaskDispatchSpec) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayTaskDispatch : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public var id: Swift::String
+  public var channelID: Swift::String
+  public var employeeID: Swift::String
+  public var title: Swift::String
+  public var projectName: Swift::String
+  public var lastStatus: Swift::String
+  public var lastPause: Swift::String?
+  public var createdAt: Foundation::Date
+  public static func == (a: RelayCore::RelayTaskDispatch, b: RelayCore::RelayTaskDispatch) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+extension RelayCore::RelayWorkforceHost {
+  @_Concurrency::MainActor final public func dispatches() -> [RelayCore::RelayTaskDispatch]
+}
+public enum RelayWorkflowWalk {
+  public enum Next : Swift::Equatable {
+    case run(RelayCore::RelayWorkflowNode, iteration: Swift::Int, inputs: [Swift::String]), skip(RelayCore::RelayWorkflowNode, iteration: Swift::Int), limit(RelayCore::RelayWorkflowNode)
+    public static func == (a: RelayCore::RelayWorkflowWalk.RelayCore::Next, b: RelayCore::RelayWorkflowWalk.RelayCore::Next) -> Swift::Bool
+  }
+  public static func loopEdges(_ nodes: [RelayCore::RelayWorkflowNode], _ edges: [RelayCore::RelayWorkflowEdge]) -> Swift::Set<Swift::String>
+  public static func next(_ definition: RelayCore::RelayWorkflowDefinition, steps: [RelayCore::RelayNodeAttempt], triggerID: Swift::String?) -> [RelayCore::RelayWorkflowWalk.RelayCore::Next]
+  public static func problems(_ definition: RelayCore::RelayWorkflowDefinition, employees: Swift::Set<Swift::String>) -> [Swift::String]
+  public static func condition(_ node: RelayCore::RelayWorkflowNode, input: Swift::String) -> Swift::String
+}
+public enum RelayChannelRouting {
+  public enum Reason : Swift::String, Swift::Sendable {
+    case mention, reply, onlyMember, all, lead
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public struct Decision : Swift::Equatable, Swift::Sendable {
+    public var targets: [Swift::String]
+    public var reason: RelayCore::RelayChannelRouting.RelayCore::Reason
+    public var modelCalls: Swift::Int
+    public var assignmentID: Swift::String?
+    public static func == (a: RelayCore::RelayChannelRouting.RelayCore::Decision, b: RelayCore::RelayChannelRouting.RelayCore::Decision) -> Swift::Bool
+  }
+  public static func route(text: Swift::String, members: [(id: Swift::String, name: Swift::String, enabled: Swift::Bool)], leadID: Swift::String, replyOwner: (employeeID: Swift::String, assignmentID: Swift::String)?, open: [(assignmentID: Swift::String, employeeID: Swift::String)]) -> RelayCore::RelayChannelRouting.RelayCore::Decision
+}
+public struct RelayCron : Swift::Equatable, Swift::Sendable {
+  public init?(_ text: Swift::String)
+  public func next(after date: Foundation::Date, timeZone: Foundation::TimeZone) -> Foundation::Date?
+  public static func == (a: RelayCore::RelayCron, b: RelayCore::RelayCron) -> Swift::Bool
+}
+final public class RelayWorkforceDatabase {
+  public enum Failure : Swift::Error, Foundation::LocalizedError, Swift::Equatable {
+    case locked, stale(Swift::String), sqlite(Swift::String)
+    public var errorDescription: Swift::String? {
+      get
+    }
+    public static func == (a: RelayCore::RelayWorkforceDatabase.RelayCore::Failure, b: RelayCore::RelayWorkforceDatabase.RelayCore::Failure) -> Swift::Bool
+  }
+  public init(directory: Foundation::URL) throws
+  @objc deinit
+  final public func transaction<T>(_ body: () throws -> T) throws -> T
+  @discardableResult
+  final public func put<T>(_ kind: Swift::String, _ id: Swift::String, _ value: T, expectedRevision: Swift::Int? = nil) throws -> Swift::Int where T : Swift::Encodable
+  final public func get<T>(_ type: T.Type, _ kind: Swift::String, _ id: Swift::String) throws -> T? where T : Swift::Decodable
+  final public func revision(_ kind: Swift::String, _ id: Swift::String) throws -> Swift::Int
+  final public func all<T>(_ type: T.Type, _ kind: Swift::String) throws -> [T] where T : Swift::Decodable
+  final public func append(_ message: RelayCore::RelayChannelMessage) throws -> RelayCore::RelayChannelMessage
+  final public func updateMessage(_ message: RelayCore::RelayChannelMessage) throws
+  final public func messages(_ channelID: Swift::String, after seq: Swift::Int = 0, limit: Swift::Int = 500) throws -> [RelayCore::RelayChannelMessage]
+  final public func claimCommand(_ id: Swift::String, kind: Swift::String) throws -> Swift::Bool
+  final public func claimOccurrence(_ id: Swift::String, runID: Swift::String) throws -> Swift::Bool
+}
+@_Concurrency::MainActor final public class RelayWorkforceHost {
+  @_Concurrency::MainActor final public var revision: Swift::Int {
+    get
+  }
+  @_Concurrency::MainActor final public var lastError: Swift::String? {
+    get
+  }
+  @_Concurrency::MainActor final public var running: Swift::Set<Swift::String> {
+    get
+  }
+  @_Concurrency::MainActor final public var onNotify: ((Swift::String, Swift::String) -> Swift::Void)? {
+    get
+    set
+    _modify
+  }
+  @_Concurrency::MainActor final public var onRunDispatched: ((Swift::String) -> Swift::Void)?
+  @_Concurrency::MainActor final public var automations: RelayCore::RelayAutomationHost?
+  @_Concurrency::MainActor final public var liveNotes: [Swift::String : Swift::String] {
+    get
+  }
+  @_Concurrency::MainActor final public let database: RelayCore::RelayWorkforceDatabase
+  @_Concurrency::MainActor final public let checkpoints: RelayCore::RelayCheckpointStore
+  @_Concurrency::MainActor final public var knowledge: RelayCore::RelayKnowledgeStore?
+  @_Concurrency::MainActor public init(store: RelayCore::RelayStore, scheduler: RelayCore::RelayScheduler, executor: any RelayCore::RelayAgentExecuting, directory: Foundation::URL? = nil) throws
+  @_Concurrency::MainActor final public func start()
+  @_Concurrency::MainActor final public func shutdown()
+  @_Concurrency::MainActor final public func employees() -> [RelayCore::RelayRole]
+  @_Concurrency::MainActor final public func profile(_ id: Swift::String) -> RelayCore::RelayEmployeeProfile
+  @_Concurrency::MainActor final public func channels() -> [RelayCore::RelayChannel]
+  @_Concurrency::MainActor final public func messages(_ channelID: Swift::String) -> [RelayCore::RelayChannelMessage]
+  @_Concurrency::MainActor final public func assignments() throws -> [RelayCore::RelayWorkAssignment]
+  @_Concurrency::MainActor final public func allAssignments() -> [RelayCore::RelayWorkAssignment]
+  @_Concurrency::MainActor final public func receipts() -> [RelayCore::RelayDeliveryReceipt]
+  @_Concurrency::MainActor final public func handoffs() -> [RelayCore::RelayHandoffRecord]
+  @_Concurrency::MainActor final public func workflows() -> [RelayCore::RelayLocalWorkflow]
+  @_Concurrency::MainActor final public func runs(_ workflowID: Swift::String? = nil) -> [RelayCore::RelayLocalRun]
+  @_Concurrency::MainActor final public func checkpoint(_ id: Swift::String) -> RelayCore::RelayTurnCheckpoint?
+  @_Concurrency::MainActor final public func report(_ receipt: RelayCore::RelayDeliveryReceipt) -> Swift::String
+  @_Concurrency::MainActor final public func project(for channel: RelayCore::RelayChannel?) -> RelayCore::RelayProject?
+  @_Concurrency::MainActor public static func directChannel(_ employeeID: Swift::String) -> Swift::String
+  @_Concurrency::MainActor public static func logChannel(_ assignment: RelayCore::RelayWorkAssignment) -> Swift::String
+  @_Concurrency::MainActor final public func saveProfile(_ profile: RelayCore::RelayEmployeeProfile)
+  @_Concurrency::MainActor final public func sendDirect(_ employeeID: Swift::String, text: Swift::String, asTask: Swift::Bool = false)
+  @_Concurrency::MainActor final public func createChannel(name: Swift::String, purpose: Swift::String, leadID: Swift::String, memberIDs: [Swift::String], projectID: Swift::String?, linkedGroupID: Swift::String? = nil)
+  @_Concurrency::MainActor final public func archiveChannel(_ id: Swift::String)
+  @discardableResult
+  @_Concurrency::MainActor final public func post(_ channelID: Swift::String, text: Swift::String, replyTo: Swift::String? = nil, commandID: Swift::String = UUID().uuidString, asTask: Swift::Bool = false) -> RelayCore::RelayChannelRouting.RelayCore::Decision?
+  @_Concurrency::MainActor final public func requestHandoff(_ assignmentID: Swift::String, to employeeID: Swift::String, note: Swift::String)
+  @_Concurrency::MainActor final public func decideHandoff(_ handoffID: Swift::String, accept: Swift::Bool)
+  @_Concurrency::MainActor final public func decideReceipt(_ receiptID: Swift::String, accept: Swift::Bool, note: Swift::String = "")
+  @discardableResult
+  @_Concurrency::MainActor final public func saveWorkflow(id: Swift::String?, definition: RelayCore::RelayWorkflowDefinition, expectedVersion: Swift::Int?) -> RelayCore::RelayLocalWorkflow?
+  @_Concurrency::MainActor final public func archiveWorkflow(_ id: Swift::String)
+  @_Concurrency::MainActor final public func runNow(_ workflowID: Swift::String, input: Swift::String = "", commandID: Swift::String = UUID().uuidString)
+  @_Concurrency::MainActor final public func decideGate(_ runID: Swift::String, nodeID: Swift::String, approve: Swift::Bool, text: Swift::String?)
+  @_Concurrency::MainActor final public func cancelRun(_ runID: Swift::String)
+  @_Concurrency::MainActor final public func name(_ employeeID: Swift::String) -> Swift::String
+  @_Concurrency::MainActor final public func waitReason(_ assignment: RelayCore::RelayWorkAssignment) -> Swift::String
+  @_Concurrency::MainActor final public func clearError()
+  @objc deinit
+}
+extension RelayCore::RelayWorkforceHost : nonisolated Observation::Observable {
+}
+public enum RelayWorkforce {
+  public static let schemaVersion: Swift::Int
+}
+public enum RelayCompletionPolicy : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+  case turn, receipt, verified
+  public var label: Swift::String {
+    get
+  }
+  public init?(rawValue: Swift::String)
+  public typealias AllCases = [RelayCore::RelayCompletionPolicy]
+  public typealias RawValue = Swift::String
+  nonisolated public static var allCases: [RelayCore::RelayCompletionPolicy] {
+    get
+  }
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public enum RelayExecutionState : Swift::String, Swift::Codable, Swift::Sendable {
+  case notStarted, running, ended, failed, timedOut, cancelled, interrupted
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public enum RelayReceiptState : Swift::String, Swift::Codable, Swift::Sendable {
+  case none, submitted, accepted, rejected, superseded
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public enum RelayVerificationState : Swift::String, Swift::Codable, Swift::Sendable {
+  case notRequested, pending, passed, partial, failed, inconclusive
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public enum RelayResultOutcome : Swift::String, Swift::Codable, Swift::Sendable {
+  case pending, succeeded, partial, failed, cancelled, awaitingReceipt, unconfirmed
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
+public struct RelayBusinessResult : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public enum State : Swift::String, Swift::Codable, Swift::Sendable {
+    case notReported, succeeded, partial, failed
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var state: RelayCore::RelayBusinessResult.RelayCore::State
+  public var reason: Swift::String?
+  public var evidenceRefs: [Swift::String]
+  public init(state: RelayCore::RelayBusinessResult.RelayCore::State = .notReported, reason: Swift::String? = nil, evidenceRefs: [Swift::String] = [])
+  public static func == (a: RelayCore::RelayBusinessResult, b: RelayCore::RelayBusinessResult) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayResultProjection : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var completionPolicy: RelayCore::RelayCompletionPolicy
+  public var execution: RelayCore::RelayExecutionState
+  public var businessResult: RelayCore::RelayBusinessResult
+  public var receipt: RelayCore::RelayReceiptState
+  public var verification: RelayCore::RelayVerificationState
+  public var outcome: RelayCore::RelayResultOutcome {
+    get
+  }
+  public init(policy: RelayCore::RelayCompletionPolicy)
+  public var executionLabel: Swift::String {
+    get
+  }
+  public var receiptLabel: Swift::String {
+    get
+  }
+  public var verificationLabel: Swift::String {
+    get
+  }
+  public var businessLabel: Swift::String {
+    get
+  }
+  public static func == (a: RelayCore::RelayResultProjection, b: RelayCore::RelayResultProjection) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayEmployeeProfile : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var id: Swift::String
+  public var skills: [Swift::String]
+  public enum MemoryPolicy : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+    case none, employee, channel
+    public init?(rawValue: Swift::String)
+    public typealias AllCases = [RelayCore::RelayEmployeeProfile.RelayCore::MemoryPolicy]
+    public typealias RawValue = Swift::String
+    nonisolated public static var allCases: [RelayCore::RelayEmployeeProfile.RelayCore::MemoryPolicy] {
+      get
+    }
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var memoryPolicy: RelayCore::RelayEmployeeProfile.RelayCore::MemoryPolicy
+  public var notes: [RelayCore::RelayMemoryNote]
+  public var projectID: Swift::String?
+  public init(id: Swift::String)
+  public static func == (a: RelayCore::RelayEmployeeProfile, b: RelayCore::RelayEmployeeProfile) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayMemoryNote : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public var id: Swift::String
+  public var text: Swift::String
+  public var scope: Swift::String
+  public var source: Swift::String
+  public var createdAt: Foundation::Date
+  public var enabled: Swift::Bool
+  public init(text: Swift::String, scope: Swift::String, source: Swift::String)
+  public static func == (a: RelayCore::RelayMemoryNote, b: RelayCore::RelayMemoryNote) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayChannelLimits : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var maxActiveDispatches: Swift::Int
+  public var maxDispatchesPerRequest: Swift::Int
+  public init()
+  public static func == (a: RelayCore::RelayChannelLimits, b: RelayCore::RelayChannelLimits) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayChannel : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public var id: Swift::String
+  public var name: Swift::String
+  public var purpose: Swift::String
+  public var leadID: Swift::String
+  public var memberIDs: [Swift::String]
+  public var projectID: Swift::String?
+  public var linkedGroupID: Swift::String?
+  public var limits: RelayCore::RelayChannelLimits
+  public var archivedAt: Foundation::Date?
+  public var createdAt: Foundation::Date
+  public init(id: Swift::String = "ch-" + UUID().uuidString.prefix(8).lowercased(), name: Swift::String, purpose: Swift::String = "", leadID: Swift::String, memberIDs: [Swift::String], projectID: Swift::String?)
+  public static func == (a: RelayCore::RelayChannel, b: RelayCore::RelayChannel) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayChannelMessage : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public enum AuthorKind : Swift::String, Swift::Codable, Swift::Sendable {
+    case user, employee, system
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var id: Swift::String
+  public var channelID: Swift::String
+  public var seq: Swift::Int
+  public var authorKind: RelayCore::RelayChannelMessage.RelayCore::AuthorKind
+  public var authorID: Swift::String
+  public var text: Swift::String
+  public var replyTo: Swift::String?
+  public var assignmentIDs: [Swift::String]
+  public var receiptIDs: [Swift::String]
+  public var createdAt: Foundation::Date
+  public static func == (a: RelayCore::RelayChannelMessage, b: RelayCore::RelayChannelMessage) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayThread : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public enum Kind : Swift::String, Swift::Codable, Swift::Sendable {
+    case direct, channel, routine, branch
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var id: Swift::String
+  public var employeeID: Swift::String
+  public var kind: RelayCore::RelayThread.RelayCore::Kind
+  public var scopeID: Swift::String
+  public var sessionID: Swift::String?
+  public var connectionID: Swift::String?
+  public var turns: Swift::Int
+  public var updatedAt: Foundation::Date
+  public static func key(_ employeeID: Swift::String, _ kind: RelayCore::RelayThread.RelayCore::Kind, _ scope: Swift::String) -> Swift::String
+  public static func == (a: RelayCore::RelayThread, b: RelayCore::RelayThread) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayWorkAssignment : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public enum State : Swift::String, Swift::Codable, Swift::Sendable {
+    case queued, running, awaitingReceipt, completed, failed, cancelled, handedOff
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public enum CallState : Swift::String, Swift::Codable, Swift::Sendable {
+    case idle, running, unconfirmed
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var id: Swift::String
+  public var ownerID: Swift::String
+  public var ownerRevision: Swift::Int
+  public var channelID: Swift::String?
+  public var requestMessageID: Swift::String?
+  public var parentID: Swift::String?
+  public var instruction: Swift::String
+  public var state: RelayCore::RelayWorkAssignment.RelayCore::State
+  public var result: RelayCore::RelayResultProjection
+  public var attemptID: Swift::String?
+  public var attempts: Swift::Int
+  public var callState: RelayCore::RelayWorkAssignment.RelayCore::CallState
+  public var threadID: Swift::String
+  public var checkpointIDs: [Swift::String]
+  public var workflowRunID: Swift::String?
+  public var reworkNote: Swift::String?
+  public var asTask: Swift::Bool?
+  public var createdAt: Foundation::Date
+  public var updatedAt: Foundation::Date
+  public var isOpen: Swift::Bool {
+    get
+  }
+  public static func == (a: RelayCore::RelayWorkAssignment, b: RelayCore::RelayWorkAssignment) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayManifestItem : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var artifactID: Swift::String
+  public var path: Swift::String
+  public var mime: Swift::String
+  public var size: Swift::Int
+  public var sha256: Swift::String
+  public var storageRef: Swift::String
+  public static func == (a: RelayCore::RelayManifestItem, b: RelayCore::RelayManifestItem) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayDeliveryReceipt : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public enum State : Swift::String, Swift::Codable, Swift::Sendable {
+    case submitted, accepted, rejected, superseded
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var id: Swift::String
+  public var assignmentID: Swift::String
+  public var attemptID: Swift::String
+  public var ownerRevision: Swift::Int
+  public var authorID: Swift::String
+  public var recipient: Swift::String
+  public var summary: Swift::String
+  public var reportSHA256: Swift::String
+  public var items: [RelayCore::RelayManifestItem]
+  public var businessResult: RelayCore::RelayBusinessResult
+  public var state: RelayCore::RelayDeliveryReceipt.RelayCore::State
+  public var supersedes: Swift::String?
+  public var decisionNote: Swift::String?
+  public var checkpointIDs: [Swift::String]
+  public var createdAt: Foundation::Date
+  public static func == (a: RelayCore::RelayDeliveryReceipt, b: RelayCore::RelayDeliveryReceipt) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayHandoffRecord : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public enum State : Swift::String, Swift::Codable, Swift::Sendable {
+    case pending, accepted, rejected
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var id: Swift::String
+  public var assignmentID: Swift::String
+  public var fromID: Swift::String
+  public var toID: Swift::String
+  public var expectedOwnerRevision: Swift::Int
+  public var note: Swift::String
+  public var state: RelayCore::RelayHandoffRecord.RelayCore::State
+  public var createdAt: Foundation::Date
+  public static func == (a: RelayCore::RelayHandoffRecord, b: RelayCore::RelayHandoffRecord) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayWorkflowNode : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public enum Kind : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+    case trigger, prompt, agent, condition, approval, gate, wait, output, note
+    public init?(rawValue: Swift::String)
+    public typealias AllCases = [RelayCore::RelayWorkflowNode.RelayCore::Kind]
+    public typealias RawValue = Swift::String
+    nonisolated public static var allCases: [RelayCore::RelayWorkflowNode.RelayCore::Kind] {
+      get
+    }
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var id: Swift::String
+  public var kind: RelayCore::RelayWorkflowNode.RelayCore::Kind
+  public var at: RelayCore::RelayPoint
+  public var fields: [Swift::String : Swift::String]
+  public init(id: Swift::String, kind: RelayCore::RelayWorkflowNode.RelayCore::Kind, fields: [Swift::String : Swift::String] = [:])
+  public var isStep: Swift::Bool {
+    get
+  }
+  public static func == (a: RelayCore::RelayWorkflowNode, b: RelayCore::RelayWorkflowNode) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayPoint : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var x: Swift::Double
+  public var y: Swift::Double
+  public static func == (a: RelayCore::RelayPoint, b: RelayCore::RelayPoint) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayWorkflowEdge : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public var id: Swift::String
+  public var from: Swift::String
+  public var to: Swift::String
+  public var type: Swift::String
+  public var branch: Swift::String?
+  public init(id: Swift::String, from: Swift::String, to: Swift::String, branch: Swift::String? = nil)
+  public static func == (a: RelayCore::RelayWorkflowEdge, b: RelayCore::RelayWorkflowEdge) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayTrigger : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public enum Kind : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+    case manual, cron, interval, once, message
+    public init?(rawValue: Swift::String)
+    public typealias AllCases = [RelayCore::RelayTrigger.RelayCore::Kind]
+    public typealias RawValue = Swift::String
+    nonisolated public static var allCases: [RelayCore::RelayTrigger.RelayCore::Kind] {
+      get
+    }
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public enum Overlap : Swift::String, Swift::Codable, Swift::CaseIterable, Swift::Sendable {
+    case skip, queueOne, parallel
+    public init?(rawValue: Swift::String)
+    public typealias AllCases = [RelayCore::RelayTrigger.RelayCore::Overlap]
+    public typealias RawValue = Swift::String
+    nonisolated public static var allCases: [RelayCore::RelayTrigger.RelayCore::Overlap] {
+      get
+    }
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var id: Swift::String
+  public var kind: RelayCore::RelayTrigger.RelayCore::Kind
+  public var cron: Swift::String?
+  public var timeZone: Swift::String
+  public var everySeconds: Swift::Int?
+  public var at: Foundation::Date?
+  public var match: Swift::String?
+  public var overlap: RelayCore::RelayTrigger.RelayCore::Overlap
+  public var enabled: Swift::Bool
+  public init(id: Swift::String, kind: RelayCore::RelayTrigger.RelayCore::Kind)
+  public static func == (a: RelayCore::RelayTrigger, b: RelayCore::RelayTrigger) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayWorkflowDefinition : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public var title: Swift::String
+  public var nodes: [RelayCore::RelayWorkflowNode]
+  public var edges: [RelayCore::RelayWorkflowEdge]
+  public var maxIterations: Swift::Int
+  public var maxDispatches: Swift::Int
+  public var triggers: [RelayCore::RelayTrigger]
+  public var defaultCompletion: RelayCore::RelayCompletionPolicy
+  public enum Advance : Swift::String, Swift::Codable, Swift::Sendable {
+    case automatic, manual
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var advance: RelayCore::RelayWorkflowDefinition.RelayCore::Advance
+  public init(title: Swift::String, nodes: [RelayCore::RelayWorkflowNode], edges: [RelayCore::RelayWorkflowEdge])
+  public static func == (a: RelayCore::RelayWorkflowDefinition, b: RelayCore::RelayWorkflowDefinition) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayLocalWorkflow : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public var id: Swift::String
+  public var version: Swift::Int
+  public var definition: RelayCore::RelayWorkflowDefinition
+  public var archivedAt: Foundation::Date?
+  public var updatedAt: Foundation::Date
+  public static func == (a: RelayCore::RelayLocalWorkflow, b: RelayCore::RelayLocalWorkflow) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayNodeAttempt : Swift::Codable, Swift::Equatable, Swift::Sendable {
+  public enum Status : Swift::String, Swift::Codable, Swift::Sendable {
+    case running, approval, waiting, done, failed, stopped, skipped
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var nodeID: Swift::String
+  public var iteration: Swift::Int
+  public var sequence: Swift::Int
+  public var status: RelayCore::RelayNodeAttempt.RelayCore::Status
+  public var completionPolicy: RelayCore::RelayCompletionPolicy?
+  public var assignmentID: Swift::String?
+  public var output: Swift::String?
+  public var branch: Swift::String?
+  public var reason: Swift::String?
+  public var startedAt: Foundation::Date
+  public var endedAt: Foundation::Date?
+  public var isOpen: Swift::Bool {
+    get
+  }
+  public static func == (a: RelayCore::RelayNodeAttempt, b: RelayCore::RelayNodeAttempt) -> Swift::Bool
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayLocalRun : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public enum State : Swift::String, Swift::Codable, Swift::Sendable {
+    case running, waiting, completed, failed, cancelled, paused
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var id: Swift::String
+  public var workflowID: Swift::String
+  public var version: Swift::Int
+  public var state: RelayCore::RelayLocalRun.RelayCore::State
+  public var occurrenceID: Swift::String
+  public var reason: Swift::String?
+  public var input: Swift::String
+  public var steps: [RelayCore::RelayNodeAttempt]
+  public var startedAt: Foundation::Date
+  public var endedAt: Foundation::Date?
+  public var isOpen: Swift::Bool {
+    get
+  }
+  public static func == (a: RelayCore::RelayLocalRun, b: RelayCore::RelayLocalRun) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayTurnCheckpoint : Swift::Codable, Swift::Equatable, Swift::Identifiable, Swift::Sendable {
+  public enum State : Swift::String, Swift::Codable, Swift::Sendable {
+    case open, finalized, interrupted, unavailable
+    public init?(rawValue: Swift::String)
+    public typealias RawValue = Swift::String
+    public var rawValue: Swift::String {
+      get
+    }
+  }
+  public var id: Swift::String
+  public var assignmentID: Swift::String?
+  public var threadID: Swift::String
+  public var turn: Swift::Int
+  public var sourceMessageID: Swift::String?
+  public var workspacePath: Swift::String
+  public var beforeTree: Swift::String?
+  public var afterTree: Swift::String?
+  public var state: RelayCore::RelayTurnCheckpoint.RelayCore::State
+  public var reason: Swift::String?
+  public var source: Swift::String
+  public var exclusions: [Swift::String]
+  public var capturedAt: Foundation::Date
+  public static func == (a: RelayCore::RelayTurnCheckpoint, b: RelayCore::RelayTurnCheckpoint) -> Swift::Bool
+  public typealias ID = Swift::String
+  public func encode(to encoder: any Swift::Encoder) throws
+  public init(from decoder: any Swift::Decoder) throws
+}
+public struct RelayWorkspaceInfo : Swift::Sendable {
+  public var path: Swift::String
+  public var root: Swift::String
+  public var branch: Swift::String
+  public var dirty: Swift::Bool
+  public init(path: Swift::String, root: Swift::String, branch: Swift::String, dirty: Swift::Bool)
+}
+public protocol RelayWorkspaceIO : Swift::Sendable {
+  func inspect(_ path: Swift::String) async throws -> RelayCore::RelayWorkspaceInfo
+  func rules(_ path: Swift::String) throws -> Swift::String
+  func diff(_ path: Swift::String) async throws -> Swift::String
+  func verify(_ project: RelayCore::RelayProject, timeout: Foundation::TimeInterval, onLine: @escaping @Sendable (Swift::String) -> Swift::Void) async throws -> RelayCore::RelayProcessResult
+}
+public struct RelayWorkspace : RelayCore::RelayWorkspaceIO {
+  public let process: RelayCore::RelayProcessRunner
+  public init(process: RelayCore::RelayProcessRunner = .init())
+  public static func overlaps(_ first: Swift::String, _ second: Swift::String) -> Swift::Bool
+  public func inspect(_ path: Swift::String) async throws -> RelayCore::RelayWorkspaceInfo
+  public func git(_ path: Swift::String, _ arguments: [Swift::String]) async throws -> Swift::String
+  public func rules(_ path: Swift::String) throws -> Swift::String
+  public func diff(_ path: Swift::String) async throws -> Swift::String
+  public func verify(_ project: RelayCore::RelayProject, timeout: Foundation::TimeInterval, onLine: @escaping @Sendable (Swift::String) -> Swift::Void) async throws -> RelayCore::RelayProcessResult
+}
+public enum RelayEndpoints {
+  public static func validate(_ text: Swift::String) throws -> Foundation::URL
+}
+extension RelayCore::RelayAutomationModule.RelayCore::Trigger : Swift::Equatable {}
+extension RelayCore::RelayAutomationModule.RelayCore::Trigger : Swift::Hashable {}
+extension RelayCore::RelayAutomationModule.RelayCore::Trigger : Swift::RawRepresentable {}
+extension RelayCore::RelayAutomationRun.RelayCore::Status : Swift::Equatable {}
+extension RelayCore::RelayAutomationRun.RelayCore::Status : Swift::Hashable {}
+extension RelayCore::RelayAutomationRun.RelayCore::Status : Swift::RawRepresentable {}
+extension RelayCore::RelayAutomationHost : Swift::Sendable {}
+extension RelayCore::RelayFlowModule.RelayCore::Step.RelayCore::Kind : Swift::Equatable {}
+extension RelayCore::RelayFlowModule.RelayCore::Step.RelayCore::Kind : Swift::Hashable {}
+extension RelayCore::RelayFlowModule.RelayCore::Step.RelayCore::Kind : Swift::RawRepresentable {}
+extension RelayCore::RelayCodexConnector : Swift::Sendable {}
+extension RelayCore::RelayConnectorTransport : Swift::Equatable {}
+extension RelayCore::RelayConnectorTransport : Swift::Hashable {}
+extension RelayCore::RelayConnectorTransport : Swift::RawRepresentable {}
+extension RelayCore::RelayCallStatus : Swift::Equatable {}
+extension RelayCore::RelayCallStatus : Swift::Hashable {}
+extension RelayCore::RelayCallStatus : Swift::RawRepresentable {}
+extension RelayCore::RelayDoubaoApp : Swift::Sendable {}
+extension RelayCore::RelayKnowledgeCardType : Swift::Equatable {}
+extension RelayCore::RelayKnowledgeCardType : Swift::Hashable {}
+extension RelayCore::RelayKnowledgeCardType : Swift::RawRepresentable {}
+extension RelayCore::RelayKnowledgeSourceKind : Swift::Equatable {}
+extension RelayCore::RelayKnowledgeSourceKind : Swift::Hashable {}
+extension RelayCore::RelayKnowledgeSourceKind : Swift::RawRepresentable {}
+extension RelayCore::RelayKnowledgeRevision.RelayCore::Action : Swift::Equatable {}
+extension RelayCore::RelayKnowledgeRevision.RelayCore::Action : Swift::Hashable {}
+extension RelayCore::RelayKnowledgeRevision.RelayCore::Action : Swift::RawRepresentable {}
+extension RelayCore::RelayModelFailure : Swift::Hashable {}
+extension RelayCore::RelayProviderKind : Swift::Equatable {}
+extension RelayCore::RelayProviderKind : Swift::Hashable {}
+extension RelayCore::RelayProviderKind : Swift::RawRepresentable {}
+extension RelayCore::RelayAPIKind : Swift::Equatable {}
+extension RelayCore::RelayAPIKind : Swift::Hashable {}
+extension RelayCore::RelayAPIKind : Swift::RawRepresentable {}
+extension RelayCore::RelayStage : Swift::Equatable {}
+extension RelayCore::RelayStage : Swift::Hashable {}
+extension RelayCore::RelayStage : Swift::RawRepresentable {}
+extension RelayCore::RelayFileAccess : Swift::Equatable {}
+extension RelayCore::RelayFileAccess : Swift::Hashable {}
+extension RelayCore::RelayFileAccess : Swift::RawRepresentable {}
+extension RelayCore::RelayRunStatus : Swift::Equatable {}
+extension RelayCore::RelayRunStatus : Swift::Hashable {}
+extension RelayCore::RelayRunStatus : Swift::RawRepresentable {}
+extension RelayCore::RelayPhase : Swift::Equatable {}
+extension RelayCore::RelayPhase : Swift::Hashable {}
+extension RelayCore::RelayPhase : Swift::RawRepresentable {}
+extension RelayCore::RelayTaskStatus : Swift::Equatable {}
+extension RelayCore::RelayTaskStatus : Swift::Hashable {}
+extension RelayCore::RelayTaskStatus : Swift::RawRepresentable {}
+extension RelayCore::RelayMilestone.RelayCore::Status : Swift::Equatable {}
+extension RelayCore::RelayMilestone.RelayCore::Status : Swift::Hashable {}
+extension RelayCore::RelayMilestone.RelayCore::Status : Swift::RawRepresentable {}
+extension RelayCore::RelayPauseReason : Swift::Equatable {}
+extension RelayCore::RelayPauseReason : Swift::Hashable {}
+extension RelayCore::RelayPauseReason : Swift::RawRepresentable {}
+extension RelayCore::RelayEventKind : Swift::Equatable {}
+extension RelayCore::RelayEventKind : Swift::Hashable {}
+extension RelayCore::RelayEventKind : Swift::RawRepresentable {}
+extension RelayCore::RelayStore : Swift::Sendable {}
+extension RelayCore::RelayProviders : Swift::Sendable {}
+extension RelayCore::RelayScheduler : Swift::Sendable {}
+extension RelayCore::RelaySessionPurpose : Swift::Equatable {}
+extension RelayCore::RelaySessionPurpose : Swift::Hashable {}
+extension RelayCore::RelaySessionPurpose : Swift::RawRepresentable {}
+extension RelayCore::RelaySessionPool : Swift::Sendable {}
+extension RelayCore::RelayTrajectoryKind : Swift::Equatable {}
+extension RelayCore::RelayTrajectoryKind : Swift::Hashable {}
+extension RelayCore::RelayTrajectoryKind : Swift::RawRepresentable {}
+extension RelayCore::RelayWorkBuddyApp : Swift::Sendable {}
+extension RelayCore::RelayCheckpointStore.RelayCore::Scope : Swift::Equatable {}
+extension RelayCore::RelayCheckpointStore.RelayCore::Scope : Swift::Hashable {}
+extension RelayCore::RelayCheckpointStore.RelayCore::Scope : Swift::RawRepresentable {}
+extension RelayCore::RelayWorkforceHost : Swift::Sendable {}
+extension RelayCore::RelayChannelRouting.RelayCore::Reason : Swift::Equatable {}
+extension RelayCore::RelayChannelRouting.RelayCore::Reason : Swift::Hashable {}
+extension RelayCore::RelayChannelRouting.RelayCore::Reason : Swift::RawRepresentable {}
+extension RelayCore::RelayCompletionPolicy : Swift::Equatable {}
+extension RelayCore::RelayCompletionPolicy : Swift::Hashable {}
+extension RelayCore::RelayCompletionPolicy : Swift::RawRepresentable {}
+extension RelayCore::RelayExecutionState : Swift::Equatable {}
+extension RelayCore::RelayExecutionState : Swift::Hashable {}
+extension RelayCore::RelayExecutionState : Swift::RawRepresentable {}
+extension RelayCore::RelayReceiptState : Swift::Equatable {}
+extension RelayCore::RelayReceiptState : Swift::Hashable {}
+extension RelayCore::RelayReceiptState : Swift::RawRepresentable {}
+extension RelayCore::RelayVerificationState : Swift::Equatable {}
+extension RelayCore::RelayVerificationState : Swift::Hashable {}
+extension RelayCore::RelayVerificationState : Swift::RawRepresentable {}
+extension RelayCore::RelayResultOutcome : Swift::Equatable {}
+extension RelayCore::RelayResultOutcome : Swift::Hashable {}
+extension RelayCore::RelayResultOutcome : Swift::RawRepresentable {}
+extension RelayCore::RelayBusinessResult.RelayCore::State : Swift::Equatable {}
+extension RelayCore::RelayBusinessResult.RelayCore::State : Swift::Hashable {}
+extension RelayCore::RelayBusinessResult.RelayCore::State : Swift::RawRepresentable {}
+extension RelayCore::RelayEmployeeProfile.RelayCore::MemoryPolicy : Swift::Equatable {}
+extension RelayCore::RelayEmployeeProfile.RelayCore::MemoryPolicy : Swift::Hashable {}
+extension RelayCore::RelayEmployeeProfile.RelayCore::MemoryPolicy : Swift::RawRepresentable {}
+extension RelayCore::RelayChannelMessage.RelayCore::AuthorKind : Swift::Equatable {}
+extension RelayCore::RelayChannelMessage.RelayCore::AuthorKind : Swift::Hashable {}
+extension RelayCore::RelayChannelMessage.RelayCore::AuthorKind : Swift::RawRepresentable {}
+extension RelayCore::RelayThread.RelayCore::Kind : Swift::Equatable {}
+extension RelayCore::RelayThread.RelayCore::Kind : Swift::Hashable {}
+extension RelayCore::RelayThread.RelayCore::Kind : Swift::RawRepresentable {}
+extension RelayCore::RelayWorkAssignment.RelayCore::State : Swift::Equatable {}
+extension RelayCore::RelayWorkAssignment.RelayCore::State : Swift::Hashable {}
+extension RelayCore::RelayWorkAssignment.RelayCore::State : Swift::RawRepresentable {}
+extension RelayCore::RelayWorkAssignment.RelayCore::CallState : Swift::Equatable {}
+extension RelayCore::RelayWorkAssignment.RelayCore::CallState : Swift::Hashable {}
+extension RelayCore::RelayWorkAssignment.RelayCore::CallState : Swift::RawRepresentable {}
+extension RelayCore::RelayDeliveryReceipt.RelayCore::State : Swift::Equatable {}
+extension RelayCore::RelayDeliveryReceipt.RelayCore::State : Swift::Hashable {}
+extension RelayCore::RelayDeliveryReceipt.RelayCore::State : Swift::RawRepresentable {}
+extension RelayCore::RelayHandoffRecord.RelayCore::State : Swift::Equatable {}
+extension RelayCore::RelayHandoffRecord.RelayCore::State : Swift::Hashable {}
+extension RelayCore::RelayHandoffRecord.RelayCore::State : Swift::RawRepresentable {}
+extension RelayCore::RelayWorkflowNode.RelayCore::Kind : Swift::Equatable {}
+extension RelayCore::RelayWorkflowNode.RelayCore::Kind : Swift::Hashable {}
+extension RelayCore::RelayWorkflowNode.RelayCore::Kind : Swift::RawRepresentable {}
+extension RelayCore::RelayTrigger.RelayCore::Kind : Swift::Equatable {}
+extension RelayCore::RelayTrigger.RelayCore::Kind : Swift::Hashable {}
+extension RelayCore::RelayTrigger.RelayCore::Kind : Swift::RawRepresentable {}
+extension RelayCore::RelayTrigger.RelayCore::Overlap : Swift::Equatable {}
+extension RelayCore::RelayTrigger.RelayCore::Overlap : Swift::Hashable {}
+extension RelayCore::RelayTrigger.RelayCore::Overlap : Swift::RawRepresentable {}
+extension RelayCore::RelayWorkflowDefinition.RelayCore::Advance : Swift::Equatable {}
+extension RelayCore::RelayWorkflowDefinition.RelayCore::Advance : Swift::Hashable {}
+extension RelayCore::RelayWorkflowDefinition.RelayCore::Advance : Swift::RawRepresentable {}
+extension RelayCore::RelayNodeAttempt.RelayCore::Status : Swift::Equatable {}
+extension RelayCore::RelayNodeAttempt.RelayCore::Status : Swift::Hashable {}
+extension RelayCore::RelayNodeAttempt.RelayCore::Status : Swift::RawRepresentable {}
+extension RelayCore::RelayLocalRun.RelayCore::State : Swift::Equatable {}
+extension RelayCore::RelayLocalRun.RelayCore::State : Swift::Hashable {}
+extension RelayCore::RelayLocalRun.RelayCore::State : Swift::RawRepresentable {}
+extension RelayCore::RelayTurnCheckpoint.RelayCore::State : Swift::Equatable {}
+extension RelayCore::RelayTurnCheckpoint.RelayCore::State : Swift::Hashable {}
+extension RelayCore::RelayTurnCheckpoint.RelayCore::State : Swift::RawRepresentable {}

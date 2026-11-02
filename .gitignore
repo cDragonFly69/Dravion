@@ -1,0 +1,9 @@
+.build/
+.sidecars/
+release/
+.swiftpm/
+Widget/PulseWidget.xcodeproj/
+*.xcuserstate
+.DS_Store
+.env
+.env.*

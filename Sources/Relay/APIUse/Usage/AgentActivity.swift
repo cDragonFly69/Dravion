@@ -1,0 +1,651 @@
+// Copyright (c) 2026 qunqin24. Licensed under the Apache License, Version 2.0.
+import Foundation
+import Observation
+
+/// Whether a supported local agent is working, read from the lifecycle records
+/// its CLI writes as it goes.
+///
+/// The obvious approach — "written to in the last N seconds" — is wrong in
+/// both directions at once, and no value of N fixes it. A turn that is running
+/// a slow tool writes nothing for minutes, so a short N stops the spinner
+/// while the agent is still busy; a finished turn goes on spinning for the
+/// rest of N. What is actually wanted is *is this turn still in flight*, and
+/// the supported agents happen to say so outright:
+///
+/// - Claude Code stamps every assistant record with a `stop_reason`.
+///   `tool_use` means it is handing off to a tool and will be back; `end_turn`
+///   means the turn is over. A trailing `user` record — a prompt, or a tool's
+///   result coming back — means it is the model's move, unless it is the one
+///   Claude Code writes when the turn is interrupted.
+/// - Codex brackets each turn with `task_started` and `task_complete` events,
+///   and its tool calls and their results say which half of a turn is in
+///   flight.
+/// - Kiro Desktop and ACP share v2 turn events; the CLI's v1 records state the
+///   same lifecycle with Prompt, ToolResults and AssistantMessage records.
+/// - ZCode Desktop, its TUI and `zcode-acp` share turn lifecycle telemetry,
+///   including a stable turn id when several turns overlap.
+///
+/// So only the tail of the newest transcripts is read, and the answer is exact
+/// rather than a guess with a timer attached.
+///
+/// A timer is still needed for one case — a session that *died* mid-turn, from
+/// a force quit, a crash, or a lid closed — because the transcript's last word
+/// then claims a turn that will never finish. What that timer is worth
+/// depends on what the turn was waiting for, which is why `Wait` exists.
+enum AgentActivity {
+    struct State: Sendable, Equatable {
+        var lastWrite: Date?
+        var isWorking: Bool
+    }
+
+    /// What a turn in flight is waiting for, which is what decides how long
+    /// its claim to be working may outlive the record that made it. A single
+    /// timeout cannot serve both: it has to be long enough for the slowest
+    /// tool, and that is far longer than a dead session should go on spinning.
+    ///
+    /// Measured over this machine's own transcripts, 3,110 turns of one and
+    /// 2,783 of the other:
+    ///
+    /// - **the model's move** — median 7s, 99% inside 70s, 10 of 3,110 over
+    ///   two minutes. So a turn that has been the model's move for a minute
+    ///   and a half is a session that ended without saying so.
+    /// - **a tool** — median 2s, but shells, builds and test runs write
+    ///   nothing while they run and the longest here was 15 minutes. This is
+    ///   the case the old single timeout was sized for, and it keeps it.
+    enum Wait: Equatable, Sendable {
+        case tool
+        case model
+
+        var grace: TimeInterval {
+            switch self {
+            case .tool: 5 * 60
+            case .model: 90
+            }
+        }
+    }
+
+    /// Used only when the tail says nothing recognisable: a format that has
+    /// changed under us, or a transcript too new to have a decisive record
+    /// yet. Falls back to the crude "written to just now".
+    static let unknownFormatWindow: TimeInterval = 30
+
+    static func states(
+        for providers: Set<Provider>,
+        now: Date = Date(),
+        home: URL = URL(fileURLWithPath: NSHomeDirectory())
+    ) -> [Provider: State] {
+        var cache = Cache()
+        return states(for: providers, now: now, home: home, cache: &cache)
+    }
+
+    /// Only parsed lifecycle facts are cached. Grace is reevaluated on every
+    /// sample, even when no bytes changed. No transcript contents are retained.
+    struct Cache: Sendable {
+        fileprivate var readings: [URL: (file: ActivityFile, provider: Provider, reading: Reading)] = [:]
+
+        fileprivate mutating func read(_ file: ActivityFile, provider: Provider) -> Reading {
+            if let saved = readings[file.url], saved.file == file, saved.provider == provider {
+                return saved.reading
+            }
+            let isZcode = provider == .zai || provider == .glmCoding
+            let lines = tail(of: file.url, limit: isZcode ? 2 * 1024 * 1024 : 128 * 1024)
+            let reading = isZcode
+                ? zcodeReading(in: lines, modified: file.modified)
+                : Reading(lastWrite: file.modified, verdict: verdict(in: lines, provider: provider))
+            // Empty/unreadable tails and cancelled reads must be retried.
+            if !lines.isEmpty, !Task.isCancelled {
+                readings[file.url] = (file, provider, reading)
+            } else {
+                readings[file.url] = nil
+            }
+            return reading
+        }
+    }
+
+    actor Reader {
+        private var cache = Cache()
+
+        func states(for providers: Set<Provider>) -> [Provider: State] {
+            AgentActivity.states(for: providers, now: Date(),
+                                 home: URL(fileURLWithPath: NSHomeDirectory()), cache: &cache)
+        }
+    }
+
+    static func states(
+        for providers: Set<Provider>, now: Date, home: URL, cache: inout Cache
+    ) -> [Provider: State] {
+        var states: [Provider: State] = [:]
+        var retained: Set<URL> = []
+
+        for provider in providers where provider.supportsLocalActivity {
+            guard !Task.isCancelled else { break }
+            let files = transcripts(for: provider, home: home, now: now)
+            var lastWrite = files.newest?.modified
+            if let newest = files.newest, provider == .zai || provider == .glmCoding {
+                retained.insert(newest.url)
+                lastWrite = cache.read(newest, provider: provider).lastWrite
+            }
+            var state = State(lastWrite: lastWrite, isWorking: false)
+
+            // Any live session counts: two terminals can be running at once,
+            // and the newest file is not necessarily the busy one. The filter
+            // is the longest grace any verdict can claim, so nothing older is
+            // worth opening.
+            // Kept whether or not this pass reaches them: the loop stops at
+            // the first busy session, and a file behind it is no less recent.
+            retained.formUnion(files.recent.map(\.url))
+            for file in files.recent {
+                guard !Task.isCancelled else { break }
+                switch cache.read(file, provider: provider).verdict {
+                case .working(let wait, let at):
+                    // Timed from the record's *own* stamp, not the file's.
+                    // Claude Code goes on writing bookkeeping into a transcript
+                    // long after the turn it belongs to ended — titles, modes,
+                    // background monitors — so a file's modification date says
+                    // when something last touched it, not when the agent last
+                    // did anything. Timing the grace off that let a session
+                    // that died mid-turn look freshly written for ever, and the
+                    // ring turned for as long as the file kept being poked.
+                    state.isWorking = now.timeIntervalSince(at ?? file.modified) <= wait.grace
+                case .finished:
+                    continue
+                case .unknown:
+                    state.isWorking = now.timeIntervalSince(file.modified) <= unknownFormatWindow
+                }
+                if state.isWorking { break }
+            }
+
+            states[provider] = state
+        }
+
+        // A cancelled pass only reached some providers; pruning by it would
+        // drop every tail it never got to — a 2 MB Z.ai one among them — and
+        // the next pass would read them all again.
+        if !Task.isCancelled {
+            cache.readings = cache.readings.filter { retained.contains($0.key) }
+        }
+        return states
+    }
+
+    // MARK: - Reading the tail
+
+    /// Internal rather than private so the rule can be driven directly against
+    /// real and synthetic transcripts — it is the whole feature, and "the
+    /// spinner looked right for a moment" is not a check.
+    enum Verdict: Equatable, Sendable {
+        /// A turn is in flight, waiting on `wait`, as of the moment the record
+        /// that says so was written. That stamp is nil only for a record which
+        /// carries none, which in practice means a format we half-recognise.
+        case working(Wait, at: Date?)
+        case finished
+        case unknown
+    }
+
+    /// Reads backwards from the end of a transcript for the first record that
+    /// settles the question, so a 20MB file costs a few kilobytes to consult.
+    static func verdict(for url: URL, provider: Provider) -> Verdict {
+        let lines = tail(of: url, limit: provider == .zai || provider == .glmCoding ? 2 * 1024 * 1024 : 128 * 1024)
+        return verdict(in: lines, provider: provider)
+    }
+
+    private static func verdict(in lines: [Data], provider: Provider) -> Verdict {
+        if provider == .zai || provider == .glmCoding {
+            return zcodeReading(in: lines, modified: .distantPast).verdict
+        }
+
+        for line in lines.reversed() {
+            guard !Task.isCancelled else { return .unknown }
+            guard let record = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
+
+            // None of the profiled providers leaves transcripts Pulse reads,
+            // so nothing ever gets this far for one of them either.
+            guard let written = provider.handWritten else { return .finished }
+            switch written {
+            case .claudeCode:
+                switch record["type"] as? String {
+                case "assistant":
+                    let stop = (record["message"] as? [String: Any])?["stop_reason"] as? String
+                    guard let stop else {
+                        // No stop reason at all is what a subagent's records
+                        // look like: they are written into the same transcript
+                        // inline, and one of them is the file's last word
+                        // whenever a background agent outlives the turn that
+                        // started it. Counting that as a turn still streaming
+                        // gave it the full tool grace — five minutes of ring
+                        // for an agent that had already answered.
+                        return .working(.model, at: stamp(of: record))
+                    }
+                    return stop == "tool_use"
+                        ? .working(.tool, at: stamp(of: record))
+                        : .finished
+                case "user":
+                    // Pressing escape ends the turn and says so in the record
+                    // it leaves behind. Read as an ordinary prompt it means the
+                    // exact opposite — that the model is about to answer — so
+                    // the ring went on turning after every interrupt for as
+                    // long as the timeout allowed.
+                    if isInterruption(record) { return .finished }
+                    // Otherwise a prompt, or a tool's result coming back: both
+                    // leave the next move with the model.
+                    return .working(.model, at: stamp(of: record))
+                default:
+                    // Bookkeeping records (queued operations, attachments, the
+                    // window title) say nothing about the turn.
+                    continue
+                }
+
+            case .codex:
+                switch (record["payload"] as? [String: Any])?["type"] as? String {
+                case "task_complete", "turn_aborted":
+                    return .finished
+                case "task_started":
+                    return .working(.model, at: stamp(of: record))
+                // Codex writes the call, then the result, as two records. Which
+                // of them the tail ends on is which half of the turn is running
+                // — and they are the only way to tell, since a turn is bounded
+                // by `task_started` alone until it completes.
+                case "function_call", "custom_tool_call", "local_shell_call",
+                     "web_search_call", "tool_search_call":
+                    return .working(.tool, at: stamp(of: record))
+                case "function_call_output", "custom_tool_call_output", "tool_search_output":
+                    return .working(.model, at: stamp(of: record))
+                default:
+                    continue
+                }
+
+            case .kiro:
+                switch (record["payload"] as? [String: Any])?["type"] as? String {
+                case "turn_end":
+                    return .finished
+                case "turn_start", "tool_result", "interaction_resolved", "assistant",
+                     "sub_agent_complete":
+                    return .working(.model, at: stamp(of: record))
+                case "tool_call", "sub_agent_start":
+                    return .working(.tool, at: stamp(of: record))
+                case "pending_interaction":
+                    // The turn is open but is waiting for a person, not doing
+                    // work. Do not animate a provider that needs attention.
+                    return .finished
+                default:
+                    break
+                }
+
+                switch record["kind"] as? String {
+                case "Prompt", "ToolResults":
+                    return .working(.model, at: stamp(of: record))
+                case "AssistantMessage":
+                    let content = (record["data"] as? [String: Any])?["content"] as? [[String: Any]] ?? []
+                    return content.contains { ($0["kind"] as? String) == "toolUse" }
+                        ? .working(.tool, at: stamp(of: record))
+                        : .finished
+                default:
+                    continue
+                }
+
+            case .antigravity, .cursor, .openCodeGo, .kimiCode, .ollamaCloud,
+             .zai, .glmCoding, .minimax, .copilot, .grok, .grokBot,
+             .volcengine, .commandCode, .deepSeek, .devin, .xiaomiMiMo,
+             .sub2api, .newAPI, .v2ex, .qoder, .stepFun, .ccSwitch, .pulseExtension:
+                // None of these leaves transcripts Pulse reads, so nothing
+                // ever gets this far.
+                return .finished
+            }
+        }
+
+        return .unknown
+    }
+
+    /// ZCode's native TUI and `zcode-acp` app-server both write this telemetry
+    /// stream. Turns can overlap, so a completion only settles its own turn;
+    /// the newest other turn may still be working.
+    fileprivate struct Reading: Sendable {
+        let lastWrite: Date?
+        let verdict: Verdict
+    }
+
+    private static func zcodeReading(in lines: [Data], modified: Date) -> Reading {
+        var completed: Set<String> = []
+        var latest: [String: (wait: Wait, at: Date?)] = [:]
+        var lastWrite: Date?
+
+        for line in lines.reversed() {
+            guard !Task.isCancelled else { return Reading(lastWrite: nil, verdict: .unknown) }
+            guard let record = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                  let event = record["event"] as? String
+            else { continue }
+            // The newest lifecycle event and the verdict come from one tail
+            // read/parse. Heartbeats alone are neither work nor recent activity.
+            if lastWrite == nil, record["turnId"] != nil,
+               event.hasPrefix("turn.") || event.hasPrefix("tool.") || event.hasPrefix("model.") {
+                lastWrite = stamp(of: record) ?? modified
+            }
+            guard let turn = record["turnId"] as? String else { continue }
+
+            switch event {
+            case "turn.completed", "turn.failed", "turn.cancelled":
+                completed.insert(turn)
+            case "tool.call.started":
+                if completed.contains(turn) { continue }
+                latest[turn] = latest[turn] ?? (.tool, stamp(of: record))
+            case "tool.call.completed", "tool.call.failed", "model.request.started",
+                 "model.request.completed", "model.request.failed":
+                if completed.contains(turn) { continue }
+                latest[turn] = latest[turn] ?? (.model, stamp(of: record))
+            case "turn.started":
+                guard !completed.contains(turn) else { continue }
+                let state = latest[turn] ?? (.model, stamp(of: record))
+                return Reading(lastWrite: lastWrite, verdict: .working(state.wait, at: state.at))
+            default:
+                continue
+            }
+        }
+
+        // A very verbose turn can push its start beyond the bounded tail. A
+        // recent event without a later completion is still exact evidence of
+        // an in-flight turn; a later completion would necessarily be nearer
+        // the end and would have put the id in `completed` above.
+        if let state = latest
+            .filter({ !completed.contains($0.key) })
+            .map(\.value)
+            .max(by: { ($0.at ?? .distantPast) < ($1.at ?? .distantPast) })
+        {
+            return Reading(lastWrite: lastWrite, verdict: .working(state.wait, at: state.at))
+        }
+        // The same log also receives process heartbeat records while ZCode is
+        // idle. Their fresh file timestamp is not evidence of a working turn.
+        return Reading(lastWrite: lastWrite, verdict: .finished)
+    }
+
+    /// Claude Code records an interrupted turn as a user message saying so,
+    /// which is the only thing in the file that marks the difference between a
+    /// turn the user stopped and one about to be answered.
+    private static func isInterruption(_ record: [String: Any]) -> Bool {
+        let content = (record["message"] as? [String: Any])?["content"]
+
+        let text: String
+        switch content {
+        case let plain as String:
+            text = plain
+        case let blocks as [[String: Any]]:
+            text = blocks.compactMap { $0["text"] as? String }.joined(separator: "\n")
+        default:
+            return false
+        }
+
+        return text.contains("[Request interrupted by user")
+    }
+
+    /// When the record was written, by its own account. Both CLIs stamp every
+    /// record that means anything; the bookkeeping ones carry no stamp, which
+    /// is part of what marks them out as bookkeeping.
+    ///
+    /// Built per call rather than kept: `ISO8601DateFormatter` is not
+    /// `Sendable`, and this runs at most once per file consulted.
+    private static func stamp(of record: [String: Any]) -> Date? {
+        guard let text = record["timestamp"] as? String else { return nil }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: text) { return date }
+
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: text)
+    }
+
+    /// The last stretch of a file, split into whole lines.
+    private static func tail(of url: URL, limit: Int = 128 * 1024) -> [Data] {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return [] }
+        defer { try? handle.close() }
+
+        let size = (try? handle.seekToEnd()) ?? 0
+        let start = size > UInt64(limit) ? size - UInt64(limit) : 0
+        try? handle.seek(toOffset: start)
+
+        guard let data = try? handle.readToEnd() else { return [] }
+        var lines = Array(LogLines(data: data))
+
+        // The first line is only half a line unless we started at the top.
+        if start > 0, !lines.isEmpty { lines.removeFirst() }
+        return lines
+    }
+
+    // MARK: - Finding the files
+
+    fileprivate struct ActivityFile: Equatable, Sendable {
+        let url: URL
+        let modified: Date
+        let size: Int
+    }
+
+    /// Discover new/resumed sessions every sample, but retain and sort only the
+    /// recent files. Old history contributes only its newest modification date.
+    private static func transcripts(
+        for provider: Provider, home: URL, now: Date
+    ) -> (newest: ActivityFile?, recent: [ActivityFile]) {
+        guard let root = root(for: provider, home: home) else { return (nil, []) }
+
+        guard let walker = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return (nil, []) }
+
+        var newest: ActivityFile?
+        var recent: [ActivityFile] = []
+        for case let url as URL in walker {
+            guard !Task.isCancelled else { break }
+            guard
+                isActivityFile(url, provider: provider),
+                let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]),
+                let modified = values.contentModificationDate,
+                let size = values.fileSize, size > 0
+            else { continue }
+
+            let file = ActivityFile(url: url, modified: modified, size: size)
+            if newest == nil || modified > newest!.modified { newest = file }
+            if now.timeIntervalSince(modified) <= Wait.tool.grace { recent.append(file) }
+        }
+
+        return (newest, recent.sorted { $0.modified > $1.modified })
+    }
+
+    private static func isActivityFile(_ url: URL, provider: Provider) -> Bool {
+        guard url.pathExtension == "jsonl" else { return false }
+        guard provider == .kiro else { return true }
+
+        // v1 CLI sessions are flat under `cli`; v2 Desktop and ACP sessions
+        // use `messages.jsonl`. Their `sub-executions` files carry a different
+        // schema and must not trigger the unknown-format freshness fallback.
+        return url.lastPathComponent == "messages.jsonl"
+            || url.deletingLastPathComponent().lastPathComponent == "cli"
+    }
+
+    /// Nil for an agent that leaves no transcripts, which is what keeps this
+    /// from walking a directory that was never going to exist.
+    static func root(
+        for provider: Provider,
+        home: URL = URL(fileURLWithPath: NSHomeDirectory())
+    ) -> URL? {
+        // No profiled provider has a root here either.
+        guard let written = provider.handWritten else { return nil }
+        return switch written {
+        case .claudeCode: home.appending(path: ".claude/projects")
+        case .codex: home.appending(path: ".codex/sessions")
+        // Kiro CLI's v1 files live directly under `cli`; Kiro Desktop and ACP
+        // v2 sessions live in workspace/session subdirectories. One recursive
+        // walk covers both without treating the desktop process itself as work.
+        case .kiro: home.appending(path: ".kiro/sessions")
+        case .zai, .glmCoding:
+            zcodeStorefront(home: home) == provider ? home.appending(path: ".zcode/cli/log") : nil
+        case .antigravity, .cursor, .openCodeGo, .kimiCode, .ollamaCloud,
+             .minimax, .copilot, .grok, .grokBot,
+             .volcengine, .commandCode, .deepSeek, .devin, .xiaomiMiMo,
+             .sub2api, .newAPI, .v2ex, .qoder, .stepFun, .ccSwitch, .pulseExtension: nil
+        }
+    }
+
+    /// ZCode can use many providers. Attribute its activity only when the
+    /// selected provider's configured endpoint identifies one of Pulse's GLM
+    /// storefronts; otherwise showing either ring would be a false claim.
+    private static func zcodeStorefront(home: URL) -> Provider? {
+        let config = home.appending(path: ".zcode/cli/config.json")
+        guard let data = try? Data(contentsOf: config),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let model = (object["model"] as? [String: Any])?["main"] as? String,
+              let providerID = model.split(separator: "/", maxSplits: 1).first.map(String.init),
+              let provider = (object["provider"] as? [String: Any])?[providerID] as? [String: Any],
+              let options = provider["options"] as? [String: Any],
+              let base = options["baseURL"] as? String,
+              let host = URL(string: base)?.host?.lowercased()
+        else { return nil }
+
+        if host == "open.bigmodel.cn" || host.hasSuffix(".bigmodel.cn") { return .glmCoding }
+        if host == "api.z.ai" || host.hasSuffix(".z.ai") { return .zai }
+        return nil
+    }
+}
+
+/// Watches for a provider's CLI being busy *right now*, so the rail can say so.
+///
+/// Deliberately a separate clock from the usage refresh. Usage is someone
+/// else's server and moves in percent; this is a local read and has to keep up
+/// with a turn that starts and finishes in seconds, or the spinner it drives
+/// would be a lie in one direction or the other.
+@MainActor
+@Observable
+final class AgentActivityMonitor {
+    /// Providers whose CLI is in the middle of a turn.
+    private(set) var running: Set<Provider> = []
+    /// The most recent write from a monitored provider, which also paces the
+    /// adaptive refresh interval.
+    private(set) var lastWrite: Date?
+
+    /// When each provider's turn last *ended*, which is a different fact from
+    /// "is it running" and is not derivable from it after the event.
+    ///
+    /// The rail's animated mark celebrates a finished turn, and it may only do
+    /// that for something witnessed: this is the witness. Kept here because
+    /// this is the one place that sees the transition — a view comparing its
+    /// own previous render would celebrate whenever SwiftUI rebuilt it.
+    private(set) var finishedAt: [Provider: Date] = [:]
+
+    /// Providers with a session stopped on a question for the user — Claude
+    /// Code's permission prompts, read from its session register
+    /// (`ClaudeSessionRegistry`). Waiting is not working: a provider is in one
+    /// set or the other.
+    private(set) var waiting: Set<Provider> = []
+    /// When each provider started waiting, for the widget's clock.
+    private(set) var waitingSince: [Provider: Date] = [:]
+
+    /// Fast enough that the spinner starts and stops with the turn rather than
+    /// lagging it noticeably, slow enough to be free.
+    private static let interval: TimeInterval = 2
+
+    private var timer: Timer?
+    private var providers: Set<Provider> = []
+    private var scan: Task<Void, Never>?
+    private let readStates: @Sendable (Set<Provider>) async -> [Provider: AgentActivity.State]
+    private let readRegistry: @Sendable () -> [ClaudeSessionRegistry.Session]
+    /// Bumped by `stop()`, so a scan that was already in flight can tell that
+    /// it has outlived the monitor. See `sample()`.
+    private var generation = 0
+
+    /// The reader is injectable so tests can hold an old scan across a change
+    /// of providers without reading the user's transcripts.
+    init(
+        readStates: (@Sendable (Set<Provider>) async -> [Provider: AgentActivity.State])? = nil,
+        readRegistry: (@Sendable () -> [ClaudeSessionRegistry.Session])? = nil
+    ) {
+        let reader = AgentActivity.Reader()
+        self.readStates = readStates ?? { await reader.states(for: $0) }
+        // Tests that inject transcripts get an empty register, not the user's.
+        if let readRegistry {
+            self.readRegistry = readRegistry
+        } else if readStates == nil {
+            self.readRegistry = { ClaudeSessionRegistry.read() }
+        } else {
+            self.readRegistry = { [] }
+        }
+    }
+
+    func start(providers: Set<Provider>) {
+        let providers = providers.filter(\.supportsLocalActivity)
+        guard providers != self.providers || timer == nil else { return }
+        stop()
+        self.providers = providers
+        guard !providers.isEmpty else { return }
+
+        let timer = Timer.scheduledTimer(withTimeInterval: Self.interval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { _ = self?.sample() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+        sample()
+    }
+
+    func stop() {
+        generation += 1
+        timer?.invalidate()
+        timer = nil
+        scan?.cancel()
+        scan = nil
+        providers = []
+        // Not a finish: the monitor stopping says nothing about the turn. A
+        // celebration here would fire every time the panel was hidden.
+        running = []
+        lastWrite = nil
+        finishedAt = [:]
+        waiting = []
+        waitingSince = [:]
+    }
+
+    /// Internal, with the task returned, so tests can await a complete scan
+    /// and its publication without waiting for the timer.
+    @discardableResult
+    func sample() -> Task<Void, Never>? {
+        guard scan == nil, !providers.isEmpty else { return scan }
+        let generation = self.generation
+        let providers = self.providers
+        let readStates = self.readStates
+        let readRegistry = self.readRegistry
+        scan = Task.detached(priority: .utility) { [weak self] in
+            let states = await readStates(providers)
+            let sessions = providers.contains(.claudeCode) ? readRegistry() : []
+            await self?.record(states, sessions: sessions, generation: generation)
+        }
+        return scan
+    }
+
+    private func record(_ states: [Provider: AgentActivity.State], sessions: [ClaudeSessionRegistry.Session] = [],
+                        generation: Int) {
+        // A cancelled scan can still return. It must not publish old activity
+        // or clear the handle belonging to the new selection's scan.
+        guard generation == self.generation, timer != nil else { return }
+        scan = nil
+
+        let blocked = sessions.filter { $0.state == .waiting }
+        let nowWaiting: Set<Provider> = blocked.isEmpty ? [] : [.claudeCode]
+        if nowWaiting != waiting {
+            let now = Date()
+            waitingSince = nowWaiting.reduce(into: [:]) { result, provider in
+                result[provider] = waitingSince[provider]
+                    ?? blocked.compactMap(\.since).min().map { min($0, now) } ?? now
+            }
+            waiting = nowWaiting
+        }
+
+        // A session waiting on the user is not working, whatever its
+        // transcript's last record says: the turn is paused on a question.
+        let active = Set(states.filter(\.value.isWorking).keys).subtracting(nowWaiting)
+        // Assign only on a change: this runs every couple of seconds, and
+        // `@Observable` would otherwise redraw the rail each time for nothing.
+        if active != running {
+            let now = Date()
+            for provider in running.subtracting(active) { finishedAt[provider] = now }
+            running = active
+        }
+
+        let newest = states.values.compactMap(\.lastWrite).max()
+        if newest != lastWrite { lastWrite = newest }
+    }
+}

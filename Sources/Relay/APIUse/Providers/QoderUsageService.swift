@@ -1,0 +1,742 @@
+// Copyright (c) 2026 qunqin24. Licensed under the Apache License, Version 2.0.
+import CryptoKit
+import Foundation
+
+/// Qoder's credits, read the way its own account page reads them.
+///
+/// **A browser session, not a key.** Qoder publishes no usage API. The account
+/// page (`/account/usage`) asks `GET /api/v2/me/usages/big_model_credits` with
+/// the signed-in cookies and draws what comes back, so that session is the
+/// credential — as Ollama's and Xiaomi's are, with the same consequences:
+/// Safari's store needs Full Disk Access, and Chromium's asks for keychain
+/// permission once.
+///
+/// **Two sites, two accounts.** `qoder.com` and `qoder.com.cn` are separate
+/// sign-ins on separate hosts, and a session for one is never sent to the
+/// other: which one is read is a setting (`AppSettings.qoderSite`), and the
+/// browser is only ever asked for that host's cookies.
+///
+/// **Not the IDE's own figures.** The Qoder app caches a credit reading of its
+/// own and exposes it over a local socket, but other monitors that read it
+/// found it disagreeing with the billing page for paid accounts. The web
+/// route is the one the page itself uses.
+///
+/// Reply shape, from the account page's own request. Both spellings are
+/// accepted per field: the mainland site's reply mixes them (`nextResetAt`
+/// beside `total_quota`), and other readers recorded all-camelCase:
+///
+/// ```json
+/// { "quotaKey": "big_model_credits", "status": "active",
+///   "nextResetAt": "2024-09-01T00:00:00Z",
+///   "totalQuota":  { "quotaSummary": { "usedValue": 125, "limitValue": 500,
+///                    "remainingValue": 375, "usagePercentage": 25, "unit": "credit" } },
+///   "sharedQuota": { "quotaSummary": { … } } }
+/// ```
+///
+/// `totalQuota` is the account's own: the plan plus any resource pack bought
+/// on top. `sharedQuota` is a team's pool, present only on a team plan. They
+/// are **two rings, never one sum** — a spent personal allowance beside an
+/// untouched team pool added together reads as "plenty left" about the pool
+/// that is actually stopping you.
+enum QoderSite: String, CaseIterable, Codable, Sendable {
+    case international
+    case china
+
+    /// The account page's host, and the only host whose cookies are read.
+    var host: String {
+        switch self {
+        case .international: "qoder.com"
+        case .china: "qoder.com.cn"
+        }
+    }
+
+    var origin: String { "https://\(host)" }
+
+    var usageURL: URL { URL(string: "\(origin)/api/v2/me/usages/big_model_credits")! }
+
+    /// One page of the account's own usage records, newest first — what the
+    /// account page's detail table asks (issue #88). **No `userId`:** the
+    /// session already says whose records these are.
+    func historiesURL(page: Int, from: Date, to: Date) -> URL? {
+        var components = URLComponents(string: "\(origin)/api/v1/me/usages/big_model_credits/histories")
+        components?.queryItems = [
+            .init(name: "page", value: String(page)),
+            .init(name: "page_size", value: String(Self.historyPageSize)),
+            .init(name: "start_time", value: String(Int(from.timeIntervalSince1970 * 1_000))),
+            .init(name: "end_time", value: String(Int(to.timeIntervalSince1970 * 1_000))),
+            .init(name: "order_by", value: "begin_at"),
+            .init(name: "order", value: "-1"),
+        ]
+        return components?.url
+    }
+
+    /// The page itself asks 100; the route takes 500, so a month is one or
+    /// two requests for every account seen.
+    static let historyPageSize = 500
+
+    /// Where somebody is sent to sign in, and the page that makes this request
+    /// — so the `Referer` is true rather than invented.
+    var accountPage: URL { URL(string: "\(origin)/account/usage")! }
+}
+
+enum QoderError: Error, Equatable {
+    case missingCookie
+    case invalidCookie
+    /// The session is there and Qoder refused it — expired, or signed out
+    /// elsewhere. Separate from `missingCookie`, because one is "set this up"
+    /// and the other is "you already did, do it again".
+    case sessionExpired
+    case unreadableReply
+    case rateLimited
+    case serverError
+    /// Nothing came back at all — no network, DNS, TLS, a timeout.
+    case unreachable
+}
+
+/// Which of a Qoder host's cookies are forwarded.
+///
+/// **A deny list, where Ollama and Xiaomi keep an allow list.** Qoder's
+/// session cookie has no published name, and other monitors reading this
+/// route forward everything the host set. So this keeps what Qoder's host set
+/// and drops what an analytics script set there — the tracking cookies a
+/// usage request has no business carrying. What is kept never leaves for any
+/// host but the one it came from.
+enum QoderCookie {
+    /// Prefixes of cookies set by third-party analytics and advertising
+    /// scripts rather than by Qoder.
+    ///
+    /// **Alibaba's own are kept** (`cna`, `isg`, `tfstk` and the like). They
+    /// look like tracking and some of them are, but the same family carries
+    /// the bot screening in front of Alibaba's sites, and dropping one of those
+    /// is how a session that works in the browser gets refused here.
+    static let analytics = [
+        "_ga", "_gid", "_gat", "_gcl", "_fbp", "_fbc", "_clck", "_clsk", "_hj",
+        "_uet", "_tt_", "_ttp", "ajs_", "amp_", "mp_", "hm_", "hmaccount",
+        "intercom-", "__stripe", "_rdt", "_pin",
+    ]
+
+    /// A `Cookie:` header reduced to the cookies worth sending, or a throw if
+    /// none are left.
+    ///
+    /// Takes what a browser store hands over *or* what somebody pasted out of
+    /// their network tab, which is why the `Cookie:` prefix is tolerated and
+    /// why each value is checked rather than trusted: a header assembled from
+    /// an arbitrary string is a header injection if a value carries a newline.
+    static func normalize(_ input: String) throws -> String {
+        guard !input.unicodeScalars.contains(where: { $0.value < 32 || $0.value > 126 }) else {
+            throw QoderError.invalidCookie
+        }
+        var header = input.trimmingCharacters(in: .whitespaces)
+        if header.lowercased().hasPrefix("cookie:") {
+            header = String(header.dropFirst(7)).trimmingCharacters(in: .whitespaces)
+        }
+        guard !header.isEmpty else { throw QoderError.missingCookie }
+        guard header.utf8.count <= 32_768 else { throw QoderError.invalidCookie }
+
+        var kept: [String] = []
+        var seen = Set<String>()
+        for pair in header.split(separator: ";") {
+            let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2 else { continue }
+            let name = parts[0].trimmingCharacters(in: .whitespaces)
+            let value = parts[1].trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty, !value.isEmpty else { continue }
+            let lowered = name.lowercased()
+            guard !analytics.contains(where: { lowered.hasPrefix($0) }) else { continue }
+            // A cookie this cannot pass on unaltered is one it drops, rather
+            // than one that costs the whole session: an odd preference cookie
+            // is not a reason to refuse the sign-in beside it.
+            guard !value.contains(" "), !value.contains("\\"), !name.contains(" ") else { continue }
+            // A host-only row and a domain row for one name is normal in every
+            // browser store; the first wins, as it does in any cookie header.
+            // See `OllamaSessionCookie.normalize`.
+            guard seen.insert(name).inserted else { continue }
+            kept.append("\(name)=\(value)")
+        }
+        guard !kept.isEmpty else { throw QoderError.invalidCookie }
+        return kept.joined(separator: "; ")
+    }
+}
+
+/// What one read of the account page's route returns.
+struct QoderSnapshot: Equatable, Sendable {
+    struct Pool: Equatable, Sendable {
+        let used: Double
+        let limit: Double
+        /// Qoder's own remainder, when it states one. Not recomputed: absent
+        /// says nothing, and zero read from silence would mark a pool spent.
+        let remaining: Double?
+    }
+
+    /// The account's own credits: plan plus resource packs.
+    let personal: Pool
+    /// A team's shared pool. Nil off a team plan, and nil when Qoder reports
+    /// an empty placeholder — a pool of zero is not one anybody can spend.
+    let shared: Pool?
+    let resetsAt: Date?
+
+    /// A part of the personal total with an end date of its own — on the one
+    /// reply seen, a bonus pack of 100 credits. Only the ones with credits
+    /// left and a date stated: a plan's entry carries `expires_at: 0`.
+    struct Pack: Equatable, Sendable {
+        let remaining: Double
+        let expiresAt: Date
+    }
+
+    var packs: [Pack] = []
+
+    /// One of the three things `totalQuota` adds up — the plan's own credits,
+    /// a resource pack bought on top, and the credits tied to one model
+    /// family — with the dated entries of its own detail list.
+    struct Part: Equatable, Sendable {
+        let pool: Pool
+        var packs: [Pack] = []
+    }
+
+    /// Nil when the reply leaves a part out or states it in a shape this
+    /// cannot read: a part is drawn only on request, and never costs the
+    /// total its reading.
+    var plan: Part?
+    var resourcePack: Part?
+    var dedicated: Part?
+}
+
+/// The account's last 31 local days of usage, day by day, from its own
+/// records (`QoderClient.fetchCreditDays`, issue #88). Two figures a day
+/// because Qoder keeps two: what the work cost before discounts and free
+/// allowances, and what was deducted — on the reporter's account 1,341 and 51
+/// for the same week.
+struct QoderCreditDays: Equatable, Sendable {
+    /// The days asked for, today included: the detailed card's span.
+    static let span = 31
+
+    struct Day: Equatable, Sendable {
+        /// Local midnight.
+        let date: Date
+        /// Σ `original_credits` of the records that began that day.
+        let used: Double
+        /// Σ `credits`.
+        let charged: Double
+    }
+
+    /// Every day from `from` through today, oldest first, quiet ones as zero:
+    /// the records cover the whole window, so a day without one used nothing.
+    let days: [Day]
+
+    /// `begin_at` decides the day, in the reader's calendar: a session that
+    /// starts at 23:58 is that day's. A record from before `from` (one the
+    /// route returned for overlapping the window) is not counted.
+    init(records: [QoderClient.HistoryReply.Record], from: Date, now: Date = Date(),
+         calendar: Calendar = .current) {
+        var used: [Date: Double] = [:]
+        var charged: [Date: Double] = [:]
+        for record in records where record.beginAt >= from {
+            let day = calendar.startOfDay(for: record.beginAt)
+            used[day, default: 0] += record.originalCredits
+            charged[day, default: 0] += record.credits
+        }
+        var days: [Day] = []
+        var cursor = calendar.startOfDay(for: from)
+        let today = calendar.startOfDay(for: now)
+        while cursor <= today {
+            days.append(Day(date: cursor, used: used[cursor] ?? 0, charged: charged[cursor] ?? 0))
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = calendar.startOfDay(for: next)
+        }
+        self.days = days
+    }
+
+    /// The last `count` days' figures added up, today included.
+    func total(overLast count: Int) -> (used: Double, charged: Double) {
+        days.suffix(count).reduce((0, 0)) { ($0.0 + $1.used, $0.1 + $1.charged) }
+    }
+}
+
+/// A read-only adapter for the account page's route. Kept apart from the app
+/// so the parsing is testable without a session.
+struct QoderClient: Sendable {
+    /// Optional only as a test seam. Production resolves the shared session at
+    /// request time so a proxy change cannot leave a client holding the one
+    /// that was invalidated.
+    var session: URLSession?
+
+    func fetch(cookie: String, site: QoderSite) async throws -> QoderSnapshot {
+        let header = try QoderCookie.normalize(cookie)
+        let request = Self.request(site.usageURL, header: header, site: site)
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await (session ?? NetworkSession.shared).recordedData(for: request)
+        } catch {
+            throw QoderError.unreachable
+        }
+
+        switch (response as? HTTPURLResponse)?.statusCode {
+        case 200: return try Self.parse(data)
+        // A signed-out page answers the API call by redirecting it at the
+        // sign-in flow; `URLSession` follows redirects, so a 3xx is only seen
+        // when one was not followed, and it means the same thing.
+        case .some(300..<400), 401, 403: throw QoderError.sessionExpired
+        case 429: throw QoderError.rateLimited
+        case .some(500...599): throw QoderError.serverError
+        default: throw QoderError.unreadableReply
+        }
+    }
+
+    /// A GET as the account page sends it, for either of its routes.
+    static func request(_ url: URL, header: String, site: QoderSite) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        request.setValue(header, forHTTPHeaderField: "Cookie")
+        request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+        request.setValue(site.origin, forHTTPHeaderField: "Origin")
+        request.setValue(site.accountPage.absoluteString, forHTTPHeaderField: "Referer")
+        // What the page's own request carries, and what every monitor known to
+        // read this route sends. `Bx-V` belongs to the bot screening Alibaba
+        // puts in front of its sites; a request that does not look like the
+        // page it stands in for is the one that screening is there to turn
+        // away. A web session, so a web client's agent — the same call
+        // `ClaudeDesktopSession` makes.
+        request.setValue("XMLHttpRequest", forHTTPHeaderField: "X-Requested-With")
+        request.setValue("2.5.35", forHTTPHeaderField: "Bx-V")
+        request.setValue(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                + "(KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+            forHTTPHeaderField: "User-Agent"
+        )
+        return request
+    }
+
+    // MARK: - The account's own records (issue #88)
+
+    /// The last 31 local days of the account's usage records, day by day:
+    /// what was used and what was deducted, the whole account's — the editor's
+    /// work as much as the CLI's.
+    ///
+    /// **The records, not the account page's chart.** Its daily route leaves
+    /// the day in progress at zero until the next day, and its figure is the
+    /// consumption before discounts under the name of what was charged —
+    /// measured by the issue's reporter against this route, which the page's
+    /// own detail table reads.
+    ///
+    /// **Nothing unless the week closed.** A page that fails, a body that is
+    /// not this shape, a record with no start or no credit figure, or paging
+    /// that still points on at `historyPageLimit`: any of them is nil, never a
+    /// sum of the part that came back, which would read as a quiet month. No
+    /// records at all is a month of zeroes, which the route stated.
+    func fetchCreditDays(cookie: String, site: QoderSite, now: Date = Date(),
+                         calendar: Calendar = .current) async -> QoderCreditDays? {
+        guard let header = try? QoderCookie.normalize(cookie),
+              let from = calendar.date(byAdding: .day, value: -(QoderCreditDays.span - 1),
+                                       to: calendar.startOfDay(for: now))
+        else { return nil }
+        var records: [HistoryReply.Record] = []
+        var page = 1
+        for _ in 0..<Self.historyPageLimit {
+            guard let url = site.historiesURL(page: page, from: from, to: now),
+                  let (data, response) = try? await (session ?? NetworkSession.shared)
+                    .recordedData(for: Self.request(url, header: header, site: site)),
+                  (response as? HTTPURLResponse)?.statusCode == 200,
+                  let reply = try? JSONDecoder().decode(HistoryReply.self, from: data)
+            else { return nil }
+            records += reply.records
+            switch reply.pageResult.following(after: page) {
+            case .last: return QoderCreditDays(records: records, from: from, now: now, calendar: calendar)
+            case .next(let later): page = later
+            case .unreadable: return nil
+            }
+        }
+        return nil
+    }
+
+    /// Pages one read may ask for: 3,000 records, four times the busiest month
+    /// seen (about 700). Past it the sum would be a sample, so the read ends
+    /// instead.
+    static let historyPageLimit = 6
+
+    /// One page of records and the paging beside it.
+    ///
+    /// `original_credits` is what the work cost before any discount or free
+    /// allowance; `credits` is what Qoder deducted, and a record it does not
+    /// bill states zero there. `begin_at` places the record in time; `time`
+    /// repeats it and `finish_at` is not read.
+    struct HistoryReply: Decodable {
+        struct Record: Decodable, Equatable {
+            let beginAt: Date
+            let credits: Double
+            let originalCredits: Double
+
+            init(beginAt: Date, credits: Double, originalCredits: Double) {
+                self.beginAt = beginAt
+                self.credits = credits
+                self.originalCredits = originalCredits
+            }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: AnyKey.self)
+                // A record that cannot be placed, or cannot say what it cost,
+                // cannot be left out of a total either: the page stops being
+                // the whole week, so the read fails rather than sum around it.
+                guard let beginAt = container.date("beginAt") ?? container.date("begin_at"),
+                      let credits = (try? container.decodeIfPresent(Double.self, forKey: .init(stringValue: "credits"))) ?? nil,
+                      let original = (try? container.either(Double.self, "originalCredits", "original_credits")) ?? nil,
+                      credits.isFinite, credits >= 0, original.isFinite, original >= 0
+                else { throw QoderError.unreadableReply }
+                self.init(beginAt: beginAt, credits: credits, originalCredits: original)
+            }
+        }
+
+        enum Following: Equatable {
+            /// The window is closed: what came back is all of it.
+            case last
+            case next(Int)
+            /// The paging points on and past its own end at once.
+            case unreadable
+        }
+
+        struct PageResult: Decodable, Equatable {
+            let nextPage: Int?
+            let lastPage: Int?
+
+            init(nextPage: Int?, lastPage: Int?) {
+                self.nextPage = nextPage
+                self.lastPage = lastPage
+            }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: AnyKey.self)
+                nextPage = (try? container.either(Int.self, "nextPage", "next_page")) ?? nil
+                lastPage = (try? container.either(Int.self, "lastPage", "last_page")) ?? nil
+            }
+
+            /// An empty or absent `next_page`, or this page being the
+            /// `last_page`, closes the window; anything else names the next.
+            func following(after page: Int) -> Following {
+                guard let nextPage, nextPage > 0 else { return .last }
+                if let lastPage, page >= lastPage { return .last }
+                guard nextPage > page else { return .unreadable }
+                if let lastPage, nextPage > lastPage { return .unreadable }
+                return .next(nextPage)
+            }
+        }
+
+        let records: [Record]
+        let pageResult: PageResult
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: AnyKey.self)
+            // **The paging is what says the window closed.** The route sends
+            // `page_result` even with nothing in the window, so a reply without
+            // it, or without `data`, is not an empty week.
+            guard let records = try container.decodeIfPresent([Record].self, forKey: .init(stringValue: "data")),
+                  let result = (try? container.either(PageResult.self, "pageResult", "page_result")) ?? nil
+            else { throw QoderError.unreadableReply }
+            self.records = records
+            pageResult = result
+        }
+    }
+
+    static func parse(_ data: Data) throws -> QoderSnapshot {
+        guard let reply = try? JSONDecoder().decode(Reply.self, from: data) else {
+            throw QoderError.unreadableReply
+        }
+        guard let personal = reply.totalQuota?.quotaSummary.flatMap(Self.pool) else {
+            throw QoderError.unreadableReply
+        }
+        let shared: QoderSnapshot.Pool?
+        if let container = reply.sharedQuota {
+            // An absent team pool is normal; an unreadable one is not proof
+            // that no allowance remains. Only a valid zero pool is omitted.
+            guard let pool = container.quotaSummary.flatMap(Self.pool) else {
+                throw QoderError.unreadableReply
+            }
+            shared = pool.limit > 0 ? pool : nil
+        } else {
+            shared = nil
+        }
+        return QoderSnapshot(personal: personal, shared: shared, resetsAt: reply.nextResetAt,
+                             packs: Self.packs(reply.totalQuota),
+                             plan: Self.part(reply.planQuota),
+                             resourcePack: Self.part(reply.resourcePackageQuota),
+                             dedicated: Self.part(reply.dedicatedResourcePackageQuota))
+    }
+
+    /// The entries of a detail list with credits left and an end date stated.
+    private static func packs(_ container: Reply.Container?) -> [QoderSnapshot.Pack] {
+        (container?.quotaDetail ?? []).compactMap { detail -> QoderSnapshot.Pack? in
+            guard detail.isActive != false, let remaining = detail.remainingValue,
+                  remaining.isFinite, remaining > 0, let expiresAt = detail.expiresAt
+            else { return nil }
+            return .init(remaining: remaining, expiresAt: expiresAt)
+        }
+    }
+
+    private static func part(_ container: Reply.Container?) -> QoderSnapshot.Part? {
+        guard let pool = container?.quotaSummary.flatMap(Self.pool) else { return nil }
+        return .init(pool: pool, packs: packs(container))
+    }
+
+    /// A summary Qoder stated in full, or nil. Negative figures are not a
+    /// reading anybody could have, so they are refused rather than clamped.
+    private static func pool(_ summary: Reply.Summary) -> QoderSnapshot.Pool? {
+        guard let used = summary.usedValue, let limit = summary.limitValue,
+              used.isFinite, limit.isFinite, used >= 0, limit >= 0
+        else { return nil }
+        let remaining = summary.remainingValue.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
+        return .init(used: used, limit: limit, remaining: remaining)
+    }
+
+    // MARK: - Reply
+
+    struct Reply: Decodable {
+        let totalQuota: Container?
+        let sharedQuota: Container?
+        let nextResetAt: Date?
+        let planQuota: Container?
+        let resourcePackageQuota: Container?
+        let dedicatedResourcePackageQuota: Container?
+
+        struct Container: Decodable {
+            let quotaSummary: Summary?
+            /// The pieces the summary adds up, each with its own end date.
+            /// Read for those dates only, and **never allowed to cost the
+            /// summary**: an entry this cannot read is left out, and a detail
+            /// list it cannot read at all is an empty one.
+            let quotaDetail: [Detail]?
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: AnyKey.self)
+                quotaSummary = try container.either(Summary.self, "quotaSummary", "quota_summary")
+                quotaDetail = (try? container.either([Detail].self, "quotaDetail", "quota_detail")) ?? nil
+            }
+        }
+
+        struct Detail: Decodable {
+            let remainingValue: Double?
+            let expiresAt: Date?
+            let isActive: Bool?
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: AnyKey.self)
+                remainingValue = (try? container.either(Double.self, "remainingValue", "remaining_value")) ?? nil
+                expiresAt = container.date("expiresAt") ?? container.date("expires_at")
+                isActive = (try? container.either(Bool.self, "isActive", "is_active")) ?? nil
+            }
+        }
+
+        struct Summary: Decodable {
+            let usedValue: Double?
+            let limitValue: Double?
+            let remainingValue: Double?
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: AnyKey.self)
+                usedValue = try container.either(Double.self, "usedValue", "used_value")
+                limitValue = try container.either(Double.self, "limitValue", "limit_value")
+                remainingValue = try container.either(Double.self, "remainingValue", "remaining_value")
+            }
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: AnyKey.self)
+            totalQuota = try container.either(Container.self, "totalQuota", "total_quota")
+            sharedQuota = try container.either(Container.self, "sharedQuota", "shared_quota")
+            nextResetAt = container.date("nextResetAt") ?? container.date("next_reset_at")
+            // The parts are read on request and must never cost the total:
+            // one this cannot read is no part, not an unreadable reply.
+            planQuota = (try? container.either(Container.self, "planQuota", "plan_quota")) ?? nil
+            resourcePackageQuota = (try? container.either(
+                Container.self, "resourcePackageQuota", "resource_package_quota")) ?? nil
+            dedicatedResourcePackageQuota = (try? container.either(
+                Container.self, "dedicatedResourcePackageQuota", "dedicated_resource_package_quota")) ?? nil
+        }
+    }
+
+    struct AnyKey: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+}
+
+private extension KeyedDecodingContainer where Key == QoderClient.AnyKey {
+    /// The camelCase key, else the snake_case one. A value of the wrong type
+    /// under either is a reply this cannot read, and says so.
+    func either<T: Decodable>(_ type: T.Type, _ camel: String, _ snake: String) throws -> T? {
+        try decodeIfPresent(type, forKey: .init(stringValue: camel))
+            ?? decodeIfPresent(type, forKey: .init(stringValue: snake))
+    }
+
+    /// ISO 8601 text or a Unix stamp, seconds or milliseconds. **Zero and
+    /// garbage are no date**: a reset drawn at 1970 is a countdown that ran
+    /// out before anybody signed up.
+    func date(_ name: String) -> Date? {
+        let key = Key(stringValue: name)
+        if let text = try? decodeIfPresent(String.self, forKey: key) {
+            let formatter = ISO8601DateFormatter()
+            if let date = formatter.date(from: text) { return date }
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return formatter.date(from: text)
+        }
+        guard let stamp = try? decodeIfPresent(Double.self, forKey: key),
+              stamp.isFinite, stamp > 0 else { return nil }
+        return Date(timeIntervalSince1970: stamp > 10_000_000_000 ? stamp / 1000 : stamp)
+    }
+}
+
+struct QoderUsageService: Sendable {
+    let cookie: String?
+    let site: QoderSite
+    /// `AppSettings.qoderShowsParts`: draw the three parts after the total.
+    var showsParts = false
+    var client = QoderClient()
+
+    func fetch() async -> ProviderUsage {
+        var usage = await read()
+        usage.sourceScope = Self.scope(site: site, cookie: cookie)
+        return usage
+    }
+
+    /// Which site and which session a reading came from, for the cache.
+    ///
+    /// A reading banked for `qoder.com` must not stand in when `qoder.com.cn`
+    /// fails, and one banked for a session since replaced is somebody else's
+    /// until shown otherwise. The session is named by its SHA-256, never by
+    /// itself. Nil without one, which never matches anything.
+    static func scope(site: QoderSite, cookie: String?) -> UsageScope? {
+        guard let cookie, !cookie.isEmpty else { return nil }
+        let fingerprint = SHA256.hash(data: Data(cookie.utf8)).map { String(format: "%02x", $0) }.joined()
+        return UsageScope(route: .webSession, organization: site.host, identity: fingerprint)
+    }
+
+    private func read() async -> ProviderUsage {
+        guard let cookie, !cookie.isEmpty else {
+            return .unavailable(.qoder, reason: .qoderSessionMissing)
+        }
+        do {
+            let snapshot = try await client.fetch(cookie: cookie, site: site)
+            let now = Date()
+            let windows = Self.windows(from: snapshot, at: now, showsParts: showsParts)
+            // A complete answer: the account has no allowance to display.
+            guard !windows.isEmpty else { return .unavailable(.qoder, reason: .qoderNoCredits) }
+            return .init(account: AccountKey(.qoder),
+                         windows: windows,
+                         observedAt: now,
+                         state: .live,
+                         plan: nil,
+                         creditBalance: nil)
+        } catch let error as QoderError {
+            let reason: ProviderUsage.Unavailability = switch error {
+            case .missingCookie, .invalidCookie: .qoderSessionMissing
+            case .sessionExpired: .qoderSessionExpired
+            case .rateLimited: .rateLimited
+            case .serverError: .serverError
+            case .unreadableReply: .unreadableReply
+            case .unreachable: .unreachable
+            }
+            return .unavailable(.qoder, reason: reason)
+        } catch {
+            return .unavailable(.qoder, reason: .unreachable)
+        }
+    }
+
+    /// The account's credits, and the team's pool beside them when there is
+    /// one.
+    ///
+    /// The fraction is Qoder's `usedValue` over its `limitValue` rather than
+    /// its `usagePercentage`, which is the same figure rounded to a whole
+    /// number — the panel rounds for itself and would otherwise round a
+    /// rounding. A pool with a limit of zero is **not drawn**: there is no
+    /// allowance to divide by, and a ring at 100% would say something was
+    /// spent that was never granted.
+    ///
+    /// **A reset already behind `now` is no reset.** A mainland trial account
+    /// was seen answering with a `nextResetAt` a month in the past beside 586
+    /// credits it could still spend (issue #59): the period stopped turning
+    /// over and the date was left where it was. Passed on, it marks the ring
+    /// as reset, the cache drops it as expired, and a complete reading
+    /// becomes "no limits reported". The credits are real; the date is not,
+    /// so the ring is drawn without one.
+    ///
+    /// **The parts, when asked for, follow the total and never replace it.**
+    /// They are the same credits counted again, so they are drawn only where
+    /// they say something the total does not: two or more with an allowance.
+    /// One alone is the total under another name. Each takes the end dates of
+    /// its own detail list; only the plan's is a reset (`nextResetAt`), since
+    /// the plan is the part that refreshes and a pack only lapses.
+    static func windows(from snapshot: QoderSnapshot, at now: Date,
+                        showsParts: Bool = false) -> [UsageWindow] {
+        var windows: [UsageWindow] = []
+        let resetsAt = snapshot.resetsAt.flatMap { $0 > now ? $0 : nil }
+        if var window = window(snapshot.personal, id: "qoder.credits", kind: .credits,
+                               resetsAt: resetsAt) {
+            window.nextExpiry = nextExpiry(of: snapshot.packs, at: now, remaining: snapshot.personal.remaining)
+            windows.append(window)
+        }
+        if showsParts, !windows.isEmpty {
+            let parts: [(QoderSnapshot.Part?, String, UsageWindow.Kind, Date?)] = [
+                (snapshot.plan, "qoder.plan", .planCredits, resetsAt),
+                (snapshot.resourcePack, "qoder.pack", .topUp, nil),
+                (snapshot.dedicated, "qoder.dedicated", .dedicatedCredits, nil),
+            ]
+            let drawn = parts.compactMap { part, id, kind, resetsAt -> UsageWindow? in
+                guard let part, var window = window(part.pool, id: id, kind: kind, resetsAt: resetsAt)
+                else { return nil }
+                window.nextExpiry = nextExpiry(of: part.packs, at: now, remaining: part.pool.remaining)
+                return window
+            }
+            if drawn.count > 1 {
+                // **Each part says its own expiry; the total no longer does.**
+                // The total's soonest lapse is always one of the parts', so
+                // with the parts drawn it repeated a part's line word for word
+                // and read as the same row listed twice (issue #76).
+                windows[0].nextExpiry = nil
+                windows += drawn
+            }
+        }
+        // The reset Qoder states is the account's. Whether a team's pool turns
+        // over on the same day is not something the reply says, so it is not
+        // claimed for it.
+        if let shared = snapshot.shared,
+           let window = window(shared, id: "qoder.shared", kind: .sharedCredits, resetsAt: nil) {
+            windows.append(window)
+        }
+        return windows
+    }
+
+    /// The soonest packs to lapse, by `UsageWindow.Expiry.soonest`'s rule.
+    /// `remaining` is what the row has left, as Qoder states it: when the
+    /// soonest lapse is all of that, the card says so instead of "of which".
+    static func nextExpiry(of packs: [QoderSnapshot.Pack], at now: Date, remaining: Double? = nil,
+                           calendar: Calendar = .current) -> UsageWindow.Expiry? {
+        guard var expiry = UsageWindow.Expiry.soonest(of: packs.map { ($0.remaining, $0.expiresAt) },
+                                                      after: now, calendar: calendar)
+        else { return nil }
+        if let remaining { expiry.coversRemainder = (expiry.totalAmount ?? expiry.amount) >= remaining }
+        return expiry
+    }
+
+    private static func window(_ pool: QoderSnapshot.Pool, id: String, kind: UsageWindow.Kind,
+                               resetsAt: Date?) -> UsageWindow? {
+        guard pool.limit > 0 else { return nil }
+        return UsageWindow(
+            id: id,
+            kind: kind,
+            scope: nil,
+            usedFraction: min(max(pool.used / pool.limit, 0), 1),
+            // Thirty days is a **sort key, not a reported length**. Qoder
+            // states when the credits reset and never how long the period is
+            // — a trial runs a fortnight, a plan a billing month — so
+            // `reportsLength` is false and the window-clock arc and the
+            // forecast leave it alone rather than dividing by a number nobody
+            // stated.
+            windowSeconds: 30 * 86_400,
+            resetsAt: resetsAt,
+            reportsLength: false,
+            isExhausted: pool.remaining.map { $0 <= 0 } ?? (pool.used >= pool.limit),
+            amounts: UsageWindow.Amounts(used: pool.used, remaining: pool.remaining, limit: pool.limit))
+    }
+}

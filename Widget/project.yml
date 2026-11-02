@@ -1,0 +1,48 @@
+name: PulseWidget
+options:
+  bundleIdPrefix: local.relay.native
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  PulseWidget:
+    type: app-extension
+    platform: macOS
+    sources: [PulseWidget, Shared]
+    info:
+      path: PulseWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Dravion
+        # The extension is named for the product, not for its target: the
+        # widget gallery and System Settings read this, and "PulseWidget" is a
+        # build detail nobody should see.
+        CFBundleName: Dravion
+        # Its own icon, from the asset catalog `Scripts/widget-assets.sh`
+        # generates out of the product mark.
+        CFBundleIconName: AppIcon
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        PulseAppGroup: $(PULSE_APP_GROUP)
+    entitlements:
+      path: PulseWidget/PulseWidget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [$(PULSE_APP_GROUP)]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.relay.native.Widget
+        PRODUCT_NAME: PulseWidget
+        PULSE_APP_GROUP: $(RELAY_APP_GROUP)
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: $(RELAY_TEAM_ID)
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+        # The gallery's icon, from the set `Scripts/widget-assets.sh` cuts out of
+        # the product mark. Without this the set is compiled but unused.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
